@@ -25,12 +25,20 @@
     h1 {
       margin-top: 0;
       text-align: center;
+      color: white;
     }
 
     .subtitle {
       text-align: center;
       color: #b8cbe6;
       margin-bottom: 24px;
+    }
+
+    .status {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #fde68a;
+      font-weight: bold;
     }
 
     .controls {
@@ -78,13 +86,6 @@
       font-size: 15px;
       color: #f8fafc;
     }
-
-    .status {
-      text-align: center;
-      margin-bottom: 20px;
-      color: #fde68a;
-      font-weight: bold;
-    }
   </style>
 </head>
 <body>
@@ -95,15 +96,21 @@
     <div class="status" id="status">Ready</div>
 
     <div class="controls">
-      <select id="languageSelect">
-        <option value="auto">Auto Detect</option>
-        <option value="hi">Hindi</option>
-        <option value="en">English</option>
+      <select id="modeSelect">
+        <option value="mixed">Mixed (Kannada + Hindi + English)</option>
+        <option value="hindi">Hindi-English</option>
+        <option value="kannada">Kannada-English</option>
+        <option value="english">English</option>
       </select>
 
       <button class="start-btn" id="startBtn">Start Recording</button>
       <button class="stop-btn" id="stopBtn" disabled>Stop Recording</button>
       <button class="send-btn" id="sendBtn" disabled>Process Audio</button>
+    </div>
+
+    <div class="box">
+      <div class="label">Mode</div>
+      <pre id="modeOutput">No output yet.</pre>
     </div>
 
     <div class="box">
@@ -133,11 +140,12 @@
     let recordedBlob = null;
 
     const statusEl = document.getElementById("status");
+    const modeOutputEl = document.getElementById("modeOutput");
     const detectedLanguageEl = document.getElementById("detectedLanguage");
     const rawTextEl = document.getElementById("rawText");
     const processedTextEl = document.getElementById("processedText");
     const structuredOutputEl = document.getElementById("structuredOutput");
-    const languageSelect = document.getElementById("languageSelect");
+    const modeSelect = document.getElementById("modeSelect");
 
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
@@ -196,6 +204,7 @@
       }
 
       statusEl.textContent = "Processing audio...";
+      modeOutputEl.textContent = "Processing...";
       detectedLanguageEl.textContent = "Processing...";
       rawTextEl.textContent = "Processing...";
       processedTextEl.textContent = "Processing...";
@@ -203,7 +212,7 @@
 
       const formData = new FormData();
       formData.append("file", recordedBlob, "recording.webm");
-      formData.append("language", languageSelect.value);
+      formData.append("mode", modeSelect.value);
 
       try {
         const response = await fetch("/process-audio", {
@@ -220,6 +229,7 @@
         }
 
         statusEl.textContent = "Done";
+        modeOutputEl.textContent = data.mode || "unknown";
         detectedLanguageEl.textContent = data.detected_language || "unknown";
         rawTextEl.textContent = data.raw_text || "No text returned";
         processedTextEl.textContent = data.processed_text || "No text returned";

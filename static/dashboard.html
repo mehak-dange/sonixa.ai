@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sonixa AI - Dashboard</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f2747;
+      color: white;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 28px;
+      background: #132f55;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .topbar h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .badge {
+      background: #1d4ed8;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-weight: bold;
+    }
+    .btn {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .logout { background: #ef4444; color: white; }
+    .history { background: #2563eb; color: white; }
+
+    .container {
+      max-width: 1000px;
+      margin: 30px auto;
+      background: #132f55;
+      padding: 24px;
+      border-radius: 18px;
+    }
+
+    .status {
+      text-align: center;
+      color: #fde68a;
+      font-weight: bold;
+      margin-bottom: 18px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    button.main-btn {
+      padding: 12px 18px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .start-btn { background: #22c55e; color: white; }
+    .stop-btn { background: #ef4444; color: white; }
+    .send-btn { background: #2563eb; color: white; }
+    .save-btn { background: #f59e0b; color: black; width: 100%; margin-top: 18px; }
+
+    .box {
+      background: #0b1f3a;
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+
+    .label {
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #93c5fd;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      margin: 0;
+      font-size: 15px;
+      color: #f8fafc;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      box-sizing: border-box;
+      margin-top: 6px;
+      font-size: 15px;
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>Sonixa AI</h1>
+    <div class="actions">
+      <div class="badge" id="domainBadge">domain</div>
+      <button class="btn history" onclick="goHistory()">History</button>
+      <button class="btn logout" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="status" id="status">Ready</div>
+
+    <div class="controls">
+      <button class="main-btn start-btn" id="startBtn">Start Recording</button>
+      <button class="main-btn stop-btn" id="stopBtn" disabled>Stop Recording</button>
+      <button class="main-btn send-btn" id="sendBtn" disabled>Process Audio</button>
+    </div>
+
+    <div class="box">
+      <div class="label">Detected Language</div>
+      <pre id="detectedLanguage">No output yet.</pre>
+    </div>
+
+    <div class="box">
+      <div class="label">Raw Whisper Text</div>
+      <pre id="rawText">No output yet.</pre>
+    </div>
+
+    <div class="box">
+      <div class="label">Processed Text</div>
+      <pre id="processedText">No output yet.</pre>
+    </div>
+
+    <div class="box">
+      <div class="label">Editable Final Report</div>
+
+      <div class="grid">
+        <div>
+          <label>Symptoms (comma separated)</label>
+          <input type="text" id="symptoms" />
+        </div>
+
+        <div>
+          <label>Duration</label>
+          <input type="text" id="duration" />
+        </div>
+
+        <div>
+          <label>Body Part (comma separated)</label>
+          <input type="text" id="bodyPart" />
+        </div>
+
+        <div>
+          <label>Severity</label>
+          <input type="text" id="severity" />
+        </div>
+      </div>
+
+      <div style="margin-top: 16px;">
+        <label>Notes</label>
+        <textarea id="notes" placeholder="Add manual corrections or review notes"></textarea>
+      </div>
+
+      <button class="main-btn save-btn" id="saveBtn">Save Final Report</button>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem("sonixa_token");
+    const domain = localStorage.getItem("sonixa_domain");
+
+    if (!token) {
+      window.location.href = "/static/login.html";
+    }
+    if (!domain) {
+      window.location.href = "/static/domain.html";
+    }
+
+    document.getElementById("domainBadge").textContent = domain;
+
+    let mediaRecorder;
+    let audioChunks = [];
+    let recordedBlob = null;
+
+    let latestDetectedLanguage = "";
+    let latestRawText = "";
+    let latestProcessedText = "";
+    let latestStructuredOutput = {};
+
+    const statusEl = document.getElementById("status");
+    const detectedLanguageEl = document.getElementById("detectedLanguage");
+    const rawTextEl = document.getElementById("rawText");
+    const processedTextEl = document.getElementById("processedText");
+
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const sendBtn = document.getElementById("sendBtn");
+    const saveBtn = document.getElementById("saveBtn");
+
+    startBtn.addEventListener("click", async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+
+        mediaRecorder.ondataavailable = event => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          recordedBlob = new Blob(audioChunks, { type: "audio/webm" });
+          sendBtn.disabled = false;
+          statusEl.textContent = "Recording stopped. Ready to process.";
+        };
+
+        mediaRecorder.start();
+        statusEl.textContent = "Recording...";
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        sendBtn.disabled = true;
+      } catch (error) {
+        statusEl.textContent = "Microphone access denied or unavailable.";
+        console.error(error);
+      }
+    });
+
+    stopBtn.addEventListener("click", () => {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+        stopBtn.disabled = true;
+        startBtn.disabled = false;
+      }
+    });
+
+    sendBtn.addEventListener("click", async () => {
+      if (!recordedBlob) {
+        statusEl.textContent = "No recording found.";
+        return;
+      }
+
+      statusEl.textContent = "Processing audio...";
+      detectedLanguageEl.textContent = "Processing...";
+      rawTextEl.textContent = "Processing...";
+      processedTextEl.textContent = "Processing...";
+
+      const formData = new FormData();
+      formData.append("file", recordedBlob, "recording.webm");
+      formData.append("mode", domain);
+
+      try {
+        const response = await fetch("/process-audio", {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + token
+          },
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          statusEl.textContent = "Error while processing.";
+          detectedLanguageEl.textContent = "Error";
+          rawTextEl.textContent = "Error";
+          processedTextEl.textContent = "Error";
+          return;
+        }
+
+        latestDetectedLanguage = data.detected_language || "";
+        latestRawText = data.raw_text || "";
+        latestProcessedText = data.processed_text || "";
+        latestStructuredOutput = data.structured_output || {};
+
+        detectedLanguageEl.textContent = latestDetectedLanguage;
+        rawTextEl.textContent = latestRawText;
+        processedTextEl.textContent = latestProcessedText;
+
+        document.getElementById("symptoms").value = (latestStructuredOutput.symptoms || []).join(", ");
+        document.getElementById("duration").value = latestStructuredOutput.duration || "";
+        document.getElementById("bodyPart").value = (latestStructuredOutput.body_part || []).join(", ");
+        document.getElementById("severity").value = latestStructuredOutput.severity || "";
+        document.getElementById("notes").value = "";
+
+        statusEl.textContent = "AI draft ready. Review and save.";
+      } catch (error) {
+        statusEl.textContent = "Request failed.";
+        console.error(error);
+      }
+    });
+
+    saveBtn.addEventListener("click", async () => {
+      const symptoms = document.getElementById("symptoms").value
+        .split(",")
+        .map(x => x.trim())
+        .filter(Boolean);
+
+      const bodyPart = document.getElementById("bodyPart").value
+        .split(",")
+        .map(x => x.trim())
+        .filter(Boolean);
+
+      const finalReport = {
+        symptoms: symptoms,
+        duration: document.getElementById("duration").value.trim() || null,
+        body_part: bodyPart,
+        severity: document.getElementById("severity").value.trim() || null,
+        notes: document.getElementById("notes").value.trim()
+      };
+
+      const payload = {
+        domain: domain,
+        detected_language: latestDetectedLanguage,
+        raw_text: latestRawText,
+        processed_text: latestProcessedText,
+        structured_output: latestStructuredOutput,
+        final_report: finalReport
+      };
+
+      statusEl.textContent = "Saving report...";
+
+      try {
+        const response = await fetch("/save-report", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          statusEl.textContent = "Error while saving report.";
+          return;
+        }
+
+        statusEl.textContent = "Report saved successfully.";
+      } catch (error) {
+        statusEl.textContent = "Save failed.";
+        console.error(error);
+      }
+    });
+
+    function logout() {
+      localStorage.removeItem("sonixa_token");
+      localStorage.removeItem("sonixa_user");
+      localStorage.removeItem("sonixa_domain");
+      window.location.href = "/static/login.html";
+    }
+
+    function goHistory() {
+      window.location.href = "/static/history.html";
+    }
+  </script>
+</body>
+</html>

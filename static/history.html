@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sonixa AI - History</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f2747;
+      color: white;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 28px;
+      background: #132f55;
+    }
+    .btn {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+      background: #2563eb;
+      color: white;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 30px auto;
+      padding: 0 18px;
+    }
+    .card {
+      background: #132f55;
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+    .section {
+      margin-top: 10px;
+    }
+    .label {
+      color: #93c5fd;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+    pre {
+      white-space: pre-wrap;
+      margin: 0;
+      background: #0b1f3a;
+      padding: 12px;
+      border-radius: 10px;
+      color: #f8fafc;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h2>Sonixa AI - History</h2>
+    <button class="btn" onclick="goDashboard()">Back to Dashboard</button>
+  </div>
+
+  <div class="container" id="historyContainer">
+    Loading history...
+  </div>
+
+  <script>
+    const token = localStorage.getItem("sonixa_token");
+    if (!token) {
+      window.location.href = "/static/login.html";
+    }
+
+    async function loadHistory() {
+      const container = document.getElementById("historyContainer");
+
+      try {
+        const res = await fetch("/history", {
+          headers: {
+            "Authorization": "Bearer " + token
+          }
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+          container.textContent = data.error;
+          return;
+        }
+
+        const history = data.history || [];
+
+        if (history.length === 0) {
+          container.textContent = "No reports saved yet.";
+          return;
+        }
+
+        container.innerHTML = history.map(item => `
+          <div class="card">
+            <div><strong>Domain:</strong> ${item.domain || "-"}</div>
+            <div><strong>Detected Language:</strong> ${item.detected_language || "-"}</div>
+            <div><strong>Created At:</strong> ${item.created_at || "-"}</div>
+
+            <div class="section">
+              <div class="label">Raw Text</div>
+              <pre>${item.raw_text || ""}</pre>
+            </div>
+
+            <div class="section">
+              <div class="label">Processed Text</div>
+              <pre>${item.processed_text || ""}</pre>
+            </div>
+
+            <div class="section">
+              <div class="label">AI Draft</div>
+              <pre>${JSON.stringify(item.structured_output || {}, null, 2)}</pre>
+            </div>
+
+            <div class="section">
+              <div class="label">Final Report</div>
+              <pre>${JSON.stringify(item.final_report || {}, null, 2)}</pre>
+            </div>
+          </div>
+        `).join("");
+      } catch (err) {
+        container.textContent = "Failed to load history.";
+      }
+    }
+
+    function goDashboard() {
+      window.location.href = "/static/dashboard.html";
+    }
+
+    loadHistory();
+  </script>
+</body>
+</html>

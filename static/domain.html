@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sonixa AI - Select Domain</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f2747;
+      color: white;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .card {
+      width: 100%;
+      max-width: 700px;
+      background: #132f55;
+      padding: 32px;
+      border-radius: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      text-align: center;
+    }
+    h1 {
+      margin-top: 0;
+    }
+    .subtitle {
+      color: #b8cbe6;
+      margin-bottom: 30px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+    .domain-card {
+      background: #0b1f3a;
+      border-radius: 14px;
+      padding: 28px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: 0.2s;
+    }
+    .domain-card:hover {
+      border-color: #60a5fa;
+      transform: translateY(-2px);
+    }
+    .title {
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .desc {
+      color: #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Select Domain</h1>
+    <div class="subtitle">Choose the workflow you want to use</div>
+
+    <div class="grid">
+      <div class="domain-card" onclick="selectDomain('healthcare')">
+        <div class="title">Healthcare</div>
+        <div class="desc">Symptoms, observations, treatment advice, structured patient report</div>
+      </div>
+
+      <div class="domain-card" onclick="selectDomain('finance')">
+        <div class="title">Finance</div>
+        <div class="desc">Payment status, verification, amount, payer and transaction details</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem("sonixa_token");
+    if (!token) {
+      window.location.href = "/static/login.html";
+    }
+
+    function selectDomain(domain) {
+      localStorage.setItem("sonixa_domain", domain);
+      window.location.href = "/static/dashboard.html";
+    }
+  </script>
+</body>
+</html>

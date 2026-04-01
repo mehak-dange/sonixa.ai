@@ -5,14 +5,15 @@ from google import genai
 client = genai.Client()
 
 
-def extract_data(input_text):
+def extract_data(input_text, mode="mixed"):
     clean_text = re.sub(r"\s+", " ", input_text.strip().lower())
 
     prompt = f"""
 You are a strict healthcare information extraction engine.
 
 Your task is to extract structured symptom information from multilingual Indian patient speech.
-The input may be in romanized Hindi, English, Kannada-English mix, or code-mixed text.
+The input may be in Kannada, Hindi, English, or code-mixed text.
+Mode: {mode}
 
 Input:
 "{clean_text}"
@@ -30,37 +31,37 @@ Use exactly this schema:
   "severity": null
 }}
 
-Important normalization rules:
-- bukhar, bukhaar, fever, jwara, jvara -> fever
-- pair dard, leg pain, kaalu novu -> leg pain
-- pet dard, stomach pain, abdominal pain -> stomach pain
-- sar dard, headache, head pain -> headache
-- khansi, cough -> cough
-- sardi, cold, running nose -> cold
-- body pain, sharir dard, mai dard -> body pain
-- weakness, kamzori -> weakness
-- ulti, vomiting -> vomiting
-- gala dard, throat pain -> throat pain
-- chest pain, seene me dard -> chest pain
-- saans ki dikkat, breathing issue, difficulty breathing -> breathing problem
+Normalization rules for symptoms:
+- fever, bukhar, bukhaar, jwara, jvara -> fever
+- leg pain, pair dard, kaalu novu -> leg pain
+- stomach pain, pet dard, hotte novu, abdominal pain -> stomach pain
+- headache, sar dard, tale novu, head pain -> headache
+- cough, khansi, kemmnu -> cough
+- cold, sardi, sheet, running nose -> cold
+- body pain, sharir dard, mai dard, deha novu -> body pain
+- weakness, kamzori, bala illa -> weakness
+- vomiting, ulti, vanti -> vomiting
+- throat pain, gala dard, gantalu novu -> throat pain
+- chest pain, seene me dard, ede novu -> chest pain
+- breathing problem, saans ki dikkat, usirata tondare, difficulty breathing -> breathing problem
 
 Duration normalization:
-- do din, 2 din, 2 days, yeradu dina -> 2 days
-- ek din, 1 din, 1 day, ondu dina -> 1 day
-- teen din, 3 din, 3 days, mooru dina -> 3 days
-- kal se, since yesterday -> since yesterday
-- ek hafte se, 1 week, one week -> 1 week
+- 1 day, ek din, ondu dina -> 1 day
+- 2 days, do din, yeradu dina -> 2 days
+- 3 days, teen din, mooru dina -> 3 days
+- since yesterday, kal se, ninne inda -> since yesterday
+- 1 week, ek hafte se, ondu vaara -> 1 week
 
 Body part normalization:
-- pair, leg, kaalu -> leg
-- pet, stomach -> stomach
-- sar, head -> head
-- gala, throat -> throat
-- seena, chest -> chest
+- leg, pair, kaalu -> leg
+- stomach, pet, hotte -> stomach
+- head, sar, tale -> head
+- throat, gala, gantalu -> throat
+- chest, seena, ede -> chest
 
 Severity normalization:
-- halka, mild -> mild
-- zyada, severe, bahut -> severe
+- mild, halka, swalpa -> mild
+- severe, zyada, tumba, bahut -> severe
 
 Rules:
 - Always extract symptoms if any symptom-like phrase is present.
@@ -92,43 +93,46 @@ Rules:
             "severity": None
         }
 
-    # -------------------------
-    # Fallback normalization map
-    # -------------------------
+    # fallback normalization maps for better reliability
     symptom_map = {
-        "fever": ["bukhar", "bukhaar", "fever", "jwara", "jvara"],
-        "leg pain": ["pair dard", "leg pain", "kaalu novu"],
-        "stomach pain": ["pet dard", "stomach pain", "abdominal pain"],
-        "headache": ["sar dard", "headache", "head pain"],
-        "cough": ["khansi", "cough"],
-        "cold": ["sardi", "cold", "running nose"],
-        "body pain": ["body pain", "sharir dard", "mai dard"],
-        "weakness": ["weakness", "kamzori"],
-        "vomiting": ["ulti", "vomiting"],
-        "throat pain": ["gala dard", "throat pain"],
-        "chest pain": ["chest pain", "seene me dard"],
-        "breathing problem": ["saans ki dikkat", "breathing issue", "difficulty breathing"]
+        "fever": ["fever", "bukhar", "bukhaar", "jwara", "jvara"],
+        "leg pain": ["leg pain", "pair dard", "kaalu novu"],
+        "stomach pain": ["stomach pain", "pet dard", "hotte novu", "abdominal pain"],
+        "headache": ["headache", "sar dard", "tale novu", "head pain"],
+        "cough": ["cough", "khansi", "kemmnu"],
+        "cold": ["cold", "sardi", "sheet", "running nose"],
+        "body pain": ["body pain", "sharir dard", "mai dard", "deha novu"],
+        "weakness": ["weakness", "kamzori", "bala illa"],
+        "vomiting": ["vomiting", "ulti", "vanti"],
+        "throat pain": ["throat pain", "gala dard", "gantalu novu"],
+        "chest pain": ["chest pain", "seene me dard", "ede novu"],
+        "breathing problem": [
+            "breathing problem",
+            "saans ki dikkat",
+            "usirata tondare",
+            "difficulty breathing"
+        ]
     }
 
     body_part_map = {
-        "leg": ["pair", "leg", "kaalu"],
-        "stomach": ["pet", "stomach"],
-        "head": ["sar", "head"],
-        "throat": ["gala", "throat"],
-        "chest": ["seena", "chest"]
+        "leg": ["leg", "pair", "kaalu"],
+        "stomach": ["stomach", "pet", "hotte"],
+        "head": ["head", "sar", "tale"],
+        "throat": ["throat", "gala", "gantalu"],
+        "chest": ["chest", "seena", "ede"]
     }
 
     duration_map = {
-        "1 day": ["ek din", "1 din", "1 day", "ondu dina"],
-        "2 days": ["do din", "2 din", "2 days", "yeradu dina"],
-        "3 days": ["teen din", "3 din", "3 days", "mooru dina"],
-        "since yesterday": ["kal se", "since yesterday"],
-        "1 week": ["ek hafte se", "1 week", "one week"]
+        "1 day": ["1 day", "ek din", "ondu dina"],
+        "2 days": ["2 days", "do din", "yeradu dina"],
+        "3 days": ["3 days", "teen din", "mooru dina"],
+        "since yesterday": ["since yesterday", "kal se", "ninne inda"],
+        "1 week": ["1 week", "ek hafte se", "ondu vaara"]
     }
 
     severity_map = {
-        "mild": ["halka", "mild"],
-        "severe": ["zyada", "severe", "bahut"]
+        "mild": ["mild", "halka", "swalpa"],
+        "severe": ["severe", "zyada", "tumba", "bahut"]
     }
 
     detected_symptoms = set(data.get("symptoms", []))
