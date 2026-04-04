@@ -26,7 +26,8 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-model = whisper.load_model("small")
+# small is multilingual and stronger than base for your current setup
+model = whisper.load_model("medium")
 
 
 class RegisterRequest(BaseModel):
@@ -143,7 +144,8 @@ def get_me(authorization: str = Header(None)):
 @app.post("/process-audio")
 async def process_audio(
     file: UploadFile = File(...),
-    mode: str = Form("mixed"),
+    domain: str = Form("healthcare"),
+    language_hint: str = Form("auto"),
     authorization: str = Header(None)
 ):
     try:
@@ -155,16 +157,43 @@ async def process_audio(
         with open(file_path, "wb") as f:
             f.write(await file.read())
 
-        result = model.transcribe(
-            file_path,
-            fp16=False,
-            temperature=0,
-            task="transcribe"
-        )
+        # language hint improves stability for Kannada/Hindi tests
+        if language_hint == "kannada":
+            result = model.transcribe(
+                file_path,
+                fp16=False,
+                temperature=0,
+                task="transcribe",
+                language="kn"
+            )
+        elif language_hint == "hindi":
+            result = model.transcribe(
+                file_path,
+                fp16=False,
+                temperature=0,
+                task="transcribe",
+                language="hi"
+            )
+        elif language_hint == "english":
+            result = model.transcribe(
+                file_path,
+                fp16=False,
+                temperature=0,
+                task="transcribe",
+                language="en"
+            )
+        else:
+            result = model.transcribe(
+                file_path,
+                fp16=False,
+                temperature=0,
+                task="transcribe"
+            )
 
         raw_text = result["text"].strip()
         detected_language = result.get("language", "unknown")
 
+        # transliterate Devanagari only
         if any('\u0900' <= ch <= '\u097F' for ch in raw_text):
             processed_text = transliterate(
                 raw_text,
@@ -172,17 +201,19 @@ async def process_audio(
                 sanscript.ITRANS
             ).lower()
         else:
+            # keep Kannada/English text as-is
             processed_text = raw_text.lower()
 
         processed_text = " ".join(processed_text.split())
 
-        structured = extract_data(processed_text, mode)
+        structured = extract_data(processed_text, domain)
 
         if os.path.exists(file_path):
             os.remove(file_path)
 
         return {
-            "mode": mode,
+            "domain": domain,
+            "language_hint": language_hint,
             "detected_language": detected_language,
             "raw_text": raw_text,
             "processed_text": processed_text,
@@ -221,7 +252,7 @@ def save_report(data: SaveReportRequest, authorization: str = Header(None)):
 
 
 @app.get("/history")
-def get_history(authorization: str = Header(None)):
+def get_history(authorization: str = Header(None), q: str = ""):
     try:
         user = get_current_user_from_token(authorization)
 
@@ -234,7 +265,7 @@ def get_history(authorization: str = Header(None)):
 
         formatted = []
         for item in history:
-            formatted.append({
+            record = {
                 "id": str(item["_id"]),
                 "domain": item.get("domain"),
                 "detected_language": item.get("detected_language"),
@@ -243,7 +274,15 @@ def get_history(authorization: str = Header(None)):
                 "structured_output": item.get("structured_output"),
                 "final_report": item.get("final_report"),
                 "created_at": item.get("created_at")
-            })
+            }
+            formatted.append(record)
+
+        if q:
+            q_lower = q.lower()
+            formatted = [
+                item for item in formatted
+                if q_lower in str(item).lower()
+            ]
 
         return {"history": formatted}
 

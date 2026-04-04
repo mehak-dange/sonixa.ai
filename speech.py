@@ -1,48 +1,90 @@
-import json
+import os
+import uuid
+import shutil
+import subprocess
+from pathlib import Path
+
 import whisper
-import sounddevice as sd
-import numpy as np
-from scipy.io.wavfile import write
-from indic_transliteration import sanscript
-from indic_transliteration.sanscript import transliterate
-from extract_llm import extract_data
 
-# recording settings
-fs = 16000
-seconds = 6
+# Load model once when server starts
+# "small" is better than "base" for multilingual accuracy
+MODEL_NAME = "small"
+model = whisper.load_model(MODEL_NAME)
 
-print("speak now...")
+UPLOAD_DIR = Path("temp_audio")
+UPLOAD_DIR.mkdir(exist_ok=True)
 
-recording = sd.rec(int(seconds * fs), samplerate=fs, channels=1, dtype="float32")
-sd.wait()
 
-audio = np.int16(recording * 32767)
-write("audio.wav", fs, audio)
+def convert_to_wav(input_path: str, output_path: str):
+    """
+    Convert any uploaded audio to clean mono 16k WAV using ffmpeg.
+    This improves ASR accuracy.
+    """
+    command = [
+        "ffmpeg",
+        "-y",
+        "-i", input_path,
+        "-ar", "16000",
+        "-ac", "1",
+        output_path
+    ]
+    subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-model = whisper.load_model("base")
 
-result = model.transcribe("audio.wav", fp16=False)
+def transcribe_audio(file_path: str, forced_language: str | None = None):
+    """
+    Transcribe audio using Whisper.
+    forced_language can be:
+    - "kn" for Kannada
+    - "hi" for Hindi
+    - "en" for English
+    - None for auto-detection
+    """
+    wav_path = str(UPLOAD_DIR / f"{uuid.uuid4().hex}.wav")
 
-raw_text = result["text"].strip()
-detected_language = result.get("language", "unknown")
+    try:
+        convert_to_wav(file_path, wav_path)
 
-print("\n=== raw whisper text ===")
-print(raw_text)
-print("\n=== detected language ===")
-print(detected_language)
+        kwargs = {
+            "fp16": False,
+            "task": "transcribe"
+        }
 
-# transliterate only if Hindi script is present
-if any('\u0900' <= ch <= '\u097F' for ch in raw_text):
-    processed_text = transliterate(raw_text, sanscript.DEVANAGARI, sanscript.ITRANS).lower()
-else:
-    processed_text = raw_text.lower()
+        if forced_language:
+            kwargs["language"] = forced_language
 
-processed_text = " ".join(processed_text.split())
+        result = model.transcribe(wav_path, **kwargs)
 
-print("\n=== processed text ===")
-print(processed_text)
+        detected_language = result.get("language", "unknown")
+        transcript = result.get("text", "").strip()
 
-final_result = extract_data(processed_text)
+        return {
+            "success": True,
+            "transcript": transcript,
+            "detected_language": detected_language
+        }
 
-print("\n=== structured output ===")
-print(json.dumps(final_result, indent=2, ensure_ascii=False))
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "transcript": "",
+            "detected_language": "unknown"
+        }
+
+    finally:
+        if os.path.exists(wav_path):
+            os.remove(wav_path)
+
+
+def save_uploaded_file(upload_file):
+    """
+    Save FastAPI UploadFile temporarily.
+    """
+    suffix = Path(upload_file.filename).suffix if upload_file.filename else ".webm"
+    temp_path = str(UPLOAD_DIR / f"{uuid.uuid4().hex}{suffix}")
+
+    with open(temp_path, "wb") as buffer:
+        shutil.copyfileobj(upload_file.file, buffer)
+
+    return temp_path
