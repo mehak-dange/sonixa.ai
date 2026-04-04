@@ -5,15 +5,12 @@ from google import genai
 client = genai.Client()
 
 
-def extract_data(input_text, mode="mixed"):
-    clean_text = re.sub(r"\s+", " ", input_text.strip().lower())
-
-    prompt = f"""
+def _healthcare_prompt(clean_text: str) -> str:
+    return f"""
 You are a strict healthcare information extraction engine.
 
-Your task is to extract structured symptom information from multilingual Indian patient speech.
-The input may be in Kannada, Hindi, English, or code-mixed text.
-Mode: {mode}
+Extract structured healthcare information from multilingual Indian patient speech.
+Input may be in Kannada, Hindi, English, or code-mixed text.
 
 Input:
 "{clean_text}"
@@ -28,10 +25,15 @@ Use exactly this schema:
   "symptoms": [],
   "duration": null,
   "body_part": [],
-  "severity": null
+  "severity": null,
+  "past_history": "",
+  "observations": "",
+  "probable_status": "",
+  "treatment_advice": "",
+  "notes": ""
 }}
 
-Normalization rules for symptoms:
+Normalization rules:
 - fever, bukhar, bukhaar, jwara, jvara -> fever
 - leg pain, pair dard, kaalu novu -> leg pain
 - stomach pain, pet dard, hotte novu, abdominal pain -> stomach pain
@@ -64,36 +66,90 @@ Severity normalization:
 - severe, zyada, tumba, bahut -> severe
 
 Rules:
-- Always extract symptoms if any symptom-like phrase is present.
-- Always normalize symptom names into simple English labels.
-- If multiple symptoms are present, include all of them.
-- If duration is clearly mentioned, normalize it.
-- If body part is clearly mentioned, include it.
-- If severity is not mentioned, return null.
-- If nothing is found, return empty list [].
-- Do not guess diseases.
-- Focus only on symptoms, duration, body_part, severity.
+- Extract only information present in the text.
+- If missing, use null for scalar fields, [] for arrays, "" for text fields.
+- Do not guess diseases aggressively.
+- probable_status can be a soft label like "possible fever complaint" if strongly supported.
 """
 
+
+def _finance_prompt(clean_text: str) -> str:
+    return f"""
+You are a strict finance/survey information extraction engine.
+
+Extract structured finance and verification information from multilingual Indian speech.
+Input may be in Kannada, Hindi, English, or code-mixed text.
+
+Input:
+"{clean_text}"
+
+Return ONLY valid JSON.
+Do NOT use markdown.
+Do NOT use ```json.
+Do NOT add explanation.
+
+Use exactly this schema:
+{{
+  "payer_name": "",
+  "payment_status": "",
+  "amount": "",
+  "payment_mode": "",
+  "payment_date": "",
+  "reason_for_payment": "",
+  "account_or_loan_confirmation": "",
+  "identity_verification": "",
+  "executive_notes": ""
+}}
+
+Normalization hints:
+- paid, payment done, jama kiya -> paid
+- pending, not paid, baki -> pending
+- cash, by cash -> cash
+- online, upi, gpay, phonepe -> online/upi
+- loan, account, emi -> preserve as spoken meaning
+- If amount is spoken, preserve it as clean text like "500 rupees"
+
+Rules:
+- Extract only what is present.
+- If unknown, use empty string.
+- Do not invent values.
+"""
+
+
+def _safe_json_response(prompt: str) -> dict:
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,
     )
-
     raw_output = response.text.strip()
     raw_output = raw_output.replace("```json", "").replace("```", "").strip()
 
     try:
-        data = json.loads(raw_output)
+        return json.loads(raw_output)
     except json.JSONDecodeError:
-        data = {
-            "symptoms": [],
-            "duration": None,
-            "body_part": [],
-            "severity": None
+        return {}
+
+
+def extract_data(input_text: str, mode: str = "healthcare") -> dict:
+    clean_text = re.sub(r"\s+", " ", input_text.strip().lower())
+
+    if mode == "finance":
+        data = _safe_json_response(_finance_prompt(clean_text))
+        return {
+            "payer_name": data.get("payer_name", ""),
+            "payment_status": data.get("payment_status", ""),
+            "amount": data.get("amount", ""),
+            "payment_mode": data.get("payment_mode", ""),
+            "payment_date": data.get("payment_date", ""),
+            "reason_for_payment": data.get("reason_for_payment", ""),
+            "account_or_loan_confirmation": data.get("account_or_loan_confirmation", ""),
+            "identity_verification": data.get("identity_verification", ""),
+            "executive_notes": data.get("executive_notes", "")
         }
 
-    # fallback normalization maps for better reliability
+    # default healthcare
+    data = _safe_json_response(_healthcare_prompt(clean_text))
+
     symptom_map = {
         "fever": ["fever", "bukhar", "bukhaar", "jwara", "jvara"],
         "leg pain": ["leg pain", "pair dard", "kaalu novu"],
@@ -106,12 +162,7 @@ Rules:
         "vomiting": ["vomiting", "ulti", "vanti"],
         "throat pain": ["throat pain", "gala dard", "gantalu novu"],
         "chest pain": ["chest pain", "seene me dard", "ede novu"],
-        "breathing problem": [
-            "breathing problem",
-            "saans ki dikkat",
-            "usirata tondare",
-            "difficulty breathing"
-        ]
+        "breathing problem": ["breathing problem", "saans ki dikkat", "usirata tondare", "difficulty breathing"]
     }
 
     body_part_map = {
@@ -168,11 +219,14 @@ Rules:
             if detected_severity:
                 break
 
-    final_data = {
+    return {
         "symptoms": sorted(list(detected_symptoms)),
         "duration": detected_duration,
         "body_part": sorted(list(detected_body_parts)),
-        "severity": detected_severity
+        "severity": detected_severity,
+        "past_history": data.get("past_history", ""),
+        "observations": data.get("observations", ""),
+        "probable_status": data.get("probable_status", ""),
+        "treatment_advice": data.get("treatment_advice", ""),
+        "notes": data.get("notes", "")
     }
-
-    return final_data

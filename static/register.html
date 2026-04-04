@@ -1,79 +1,125 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Sonixa - Register</title>
-
-    <!-- ✅ IMPORTANT: use /static/ -->
-    <link rel="stylesheet" href="/static/style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sonixa AI - Register</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f2747;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .card {
+      width: 100%;
+      max-width: 450px;
+      background: #132f55;
+      padding: 32px;
+      border-radius: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+    h1 { margin-top: 0; text-align: center; }
+    .subtitle { text-align: center; color: #b8cbe6; margin-bottom: 24px; }
+    label { display: block; margin: 12px 0 6px; font-weight: bold; }
+    input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      font-size: 15px;
+      box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      margin-top: 18px;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      background: #22c55e;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .link { text-align: center; margin-top: 16px; }
+    .link a { color: #93c5fd; text-decoration: none; }
+    .msg {
+      margin-top: 14px;
+      text-align: center;
+      color: #fde68a;
+      white-space: pre-wrap;
+    }
+  </style>
 </head>
-
 <body>
+  <div class="card">
+    <h1>Create Account</h1>
+    <div class="subtitle">Register for Sonixa AI</div>
 
-<div class="container">
-    <div class="card">
-        <h1>Sonixa AI</h1>
-        <p>Create your account</p>
+    <label>Full Name</label>
+    <input type="text" id="name" placeholder="Enter full name" />
 
-        <form id="registerForm">
-            <label>Name</label>
-            <input type="text" id="name" placeholder="Enter name" required>
+    <label>Email</label>
+    <input type="email" id="email" placeholder="Enter email" />
 
-            <label>Email</label>
-            <input type="email" id="email" placeholder="Enter email" required>
+    <label>Password</label>
+    <input type="password" id="password" placeholder="Enter password" />
 
-            <label>Password</label>
-            <input type="password" id="password" placeholder="Enter password" required>
+    <button id="registerBtn">Register</button>
 
-            <button type="submit">Register</button>
-        </form>
+    <div class="msg" id="msg"></div>
 
-        <p style="margin-top: 10px;">
-            Already have account?
-            <a href="/static/index.html">Login</a>
-        </p>
-
-        <p id="msg"></p>
+    <div class="link">
+      Already have an account? <a href="/static/login.html">Login</a>
     </div>
-</div>
+  </div>
 
-<!-- ✅ IMPORTANT: use /static/ -->
-<script>
-document.getElementById("registerForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-
+  <script>
     const msg = document.getElementById("msg");
 
-    try {
-        const res = await fetch("http://127.0.0.1:8000/register", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                name: document.getElementById("name").value,
-                email: document.getElementById("email").value,
-                password: document.getElementById("password").value
-            })
+    document.getElementById("registerBtn").addEventListener("click", async () => {
+      const name = document.getElementById("name").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value.trim();
+
+      msg.textContent = "Registering...";
+
+      try {
+        const res = await fetch("/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, password })
         });
 
-        const data = await res.json();
+        const rawText = await res.text();
+        let data = null;
 
-        console.log("Response:", data);  // 👈 DEBUG
-
-        if (res.ok) {
-            msg.innerText = "✅ Registered successfully!";
-            window.location.href = "/static/index.html";
-        } else {
-            msg.innerText = "❌ " + (data.detail || data.error || "Registration failed");
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          data = { detail: rawText };
         }
 
-    } catch (err) {
-        console.error(err);
-        msg.innerText = "❌ Server error";
-    }
-});
-</script>
+        if (!res.ok) {
+          msg.textContent = data.detail || data.error || "Registration failed";
+          return;
+        }
 
+        localStorage.setItem("sonixa_token", data.token);
+        localStorage.setItem("sonixa_user", JSON.stringify(data.user));
+
+        msg.textContent = "Registration successful";
+        window.location.href = "/static/domain.html";
+      } catch (err) {
+        msg.textContent = "Server error";
+        console.error(err);
+      }
+    });
+  </script>
 </body>
 </html>

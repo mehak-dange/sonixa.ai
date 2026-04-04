@@ -7,11 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr
-from extract_llm import extract_data
 from indic_transliteration import sanscript
 from indic_transliteration.sanscript import transliterate
+
 from db import users_collection, interactions_collection
 from auth_utils import hash_password, verify_password, create_access_token, decode_access_token
+from extract_llm import extract_data
 
 app = FastAPI()
 
@@ -25,13 +26,9 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Load whisper once
 model = whisper.load_model("small")
 
 
-# -----------------------------
-# Pydantic models
-# -----------------------------
 class RegisterRequest(BaseModel):
     name: str
     email: EmailStr
@@ -52,9 +49,6 @@ class SaveReportRequest(BaseModel):
     final_report: dict
 
 
-# -----------------------------
-# Helper functions
-# -----------------------------
 def serialize_user(user):
     return {
         "id": str(user["_id"]),
@@ -87,9 +81,6 @@ def get_current_user_from_token(authorization: str = None):
     return user
 
 
-# -----------------------------
-# Basic routes
-# -----------------------------
 @app.get("/")
 def home():
     return FileResponse("static/login.html")
@@ -100,9 +91,6 @@ def health():
     return {"message": "Sonixa backend is running"}
 
 
-# -----------------------------
-# Auth routes
-# -----------------------------
 @app.post("/register")
 def register_user(data: RegisterRequest):
     existing_user = users_collection.find_one({"email": data.email.lower()})
@@ -152,11 +140,6 @@ def get_me(authorization: str = Header(None)):
     return {"user": serialize_user(user)}
 
 
-# -----------------------------
-# Audio processing route
-# This returns AI draft only.
-# It does NOT save to DB.
-# -----------------------------
 @app.post("/process-audio")
 async def process_audio(
     file: UploadFile = File(...),
@@ -164,7 +147,6 @@ async def process_audio(
     authorization: str = Header(None)
 ):
     try:
-        # user must be logged in
         _ = get_current_user_from_token(authorization)
 
         ext = file.filename.split(".")[-1] if "." in file.filename else "webm"
@@ -183,7 +165,6 @@ async def process_audio(
         raw_text = result["text"].strip()
         detected_language = result.get("language", "unknown")
 
-        # transliterate only if Devanagari appears
         if any('\u0900' <= ch <= '\u097F' for ch in raw_text):
             processed_text = transliterate(
                 raw_text,
@@ -212,10 +193,6 @@ async def process_audio(
         return {"error": str(e)}
 
 
-# -----------------------------
-# Save final manually edited report
-# This is the real DB save route
-# -----------------------------
 @app.post("/save-report")
 def save_report(data: SaveReportRequest, authorization: str = Header(None)):
     try:
@@ -227,8 +204,8 @@ def save_report(data: SaveReportRequest, authorization: str = Header(None)):
             "detected_language": data.detected_language,
             "raw_text": data.raw_text,
             "processed_text": data.processed_text,
-            "structured_output": data.structured_output,  # AI draft
-            "final_report": data.final_report,            # human-edited final report
+            "structured_output": data.structured_output,
+            "final_report": data.final_report,
             "created_at": datetime.now(timezone.utc)
         }
 
@@ -243,10 +220,6 @@ def save_report(data: SaveReportRequest, authorization: str = Header(None)):
         return {"error": str(e)}
 
 
-# -----------------------------
-# History route
-# Returns saved final reports
-# -----------------------------
 @app.get("/history")
 def get_history(authorization: str = Header(None)):
     try:
@@ -273,6 +246,25 @@ def get_history(authorization: str = Header(None)):
             })
 
         return {"history": formatted}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.delete("/delete-report/{report_id}")
+def delete_report(report_id: str, authorization: str = Header(None)):
+    try:
+        user = get_current_user_from_token(authorization)
+
+        result = interactions_collection.delete_one({
+            "_id": ObjectId(report_id),
+            "user_id": str(user["_id"])
+        })
+
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        return {"message": "Report deleted successfully"}
 
     except Exception as e:
         return {"error": str(e)}

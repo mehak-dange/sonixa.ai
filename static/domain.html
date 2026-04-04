@@ -17,16 +17,14 @@
     }
     .card {
       width: 100%;
-      max-width: 700px;
+      max-width: 760px;
       background: #132f55;
       padding: 32px;
       border-radius: 18px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.25);
       text-align: center;
     }
-    h1 {
-      margin-top: 0;
-    }
+    h1 { margin-top: 0; }
     .subtitle {
       color: #b8cbe6;
       margin-bottom: 30px;
@@ -43,6 +41,7 @@
       cursor: pointer;
       border: 2px solid transparent;
       transition: 0.2s;
+      text-align: left;
     }
     .domain-card:hover {
       border-color: #60a5fa;
@@ -53,25 +52,29 @@
       font-weight: bold;
       margin-bottom: 10px;
     }
-    .desc {
-      color: #cbd5e1;
-    }
+    .desc { color: #cbd5e1; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>Select Domain</h1>
-    <div class="subtitle">Choose the workflow you want to use</div>
+    <div class="subtitle">Choose the workflow Sonixa should use</div>
 
     <div class="grid">
       <div class="domain-card" onclick="selectDomain('healthcare')">
         <div class="title">Healthcare</div>
-        <div class="desc">Symptoms, observations, treatment advice, structured patient report</div>
+        <div class="desc">
+          Symptoms, past history, observations, probable status,
+          treatment advice, editable patient report.
+        </div>
       </div>
 
       <div class="domain-card" onclick="selectDomain('finance')">
         <div class="title">Finance</div>
-        <div class="desc">Payment status, verification, amount, payer and transaction details</div>
+        <div class="desc">
+          Payment status, amount, payment mode, payment date,
+          payer details, verification workflow.
+        </div>
       </div>
     </div>
   </div>

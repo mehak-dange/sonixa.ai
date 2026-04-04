@@ -19,10 +19,7 @@
       background: #132f55;
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
-    .topbar h1 {
-      margin: 0;
-      font-size: 28px;
-    }
+    .topbar h1 { margin: 0; font-size: 28px; }
     .actions {
       display: flex;
       gap: 12px;
@@ -45,7 +42,7 @@
     .history { background: #2563eb; color: white; }
 
     .container {
-      max-width: 1000px;
+      max-width: 1100px;
       margin: 30px auto;
       background: #132f55;
       padding: 24px;
@@ -122,6 +119,10 @@
       min-height: 90px;
       resize: vertical;
     }
+
+    .hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -161,31 +162,87 @@
     <div class="box">
       <div class="label">Editable Final Report</div>
 
-      <div class="grid">
-        <div>
-          <label>Symptoms (comma separated)</label>
-          <input type="text" id="symptoms" />
+      <div id="healthcareForm" class="hidden">
+        <div class="grid">
+          <div>
+            <label>Symptoms (comma separated)</label>
+            <input type="text" id="hc_symptoms">
+          </div>
+          <div>
+            <label>Duration</label>
+            <input type="text" id="hc_duration">
+          </div>
+          <div>
+            <label>Body Part (comma separated)</label>
+            <input type="text" id="hc_body_part">
+          </div>
+          <div>
+            <label>Severity</label>
+            <input type="text" id="hc_severity">
+          </div>
+          <div>
+            <label>Past History</label>
+            <input type="text" id="hc_past_history">
+          </div>
+          <div>
+            <label>Probable Status</label>
+            <input type="text" id="hc_probable_status">
+          </div>
         </div>
 
-        <div>
-          <label>Duration</label>
-          <input type="text" id="duration" />
+        <div style="margin-top:16px;">
+          <label>Observations</label>
+          <textarea id="hc_observations"></textarea>
         </div>
 
-        <div>
-          <label>Body Part (comma separated)</label>
-          <input type="text" id="bodyPart" />
+        <div style="margin-top:16px;">
+          <label>Treatment Advice</label>
+          <textarea id="hc_treatment_advice"></textarea>
         </div>
 
-        <div>
-          <label>Severity</label>
-          <input type="text" id="severity" />
+        <div style="margin-top:16px;">
+          <label>Notes</label>
+          <textarea id="hc_notes"></textarea>
         </div>
       </div>
 
-      <div style="margin-top: 16px;">
-        <label>Notes</label>
-        <textarea id="notes" placeholder="Add manual corrections or review notes"></textarea>
+      <div id="financeForm" class="hidden">
+        <div class="grid">
+          <div>
+            <label>Payer Name</label>
+            <input type="text" id="fn_payer_name">
+          </div>
+          <div>
+            <label>Payment Status</label>
+            <input type="text" id="fn_payment_status">
+          </div>
+          <div>
+            <label>Amount</label>
+            <input type="text" id="fn_amount">
+          </div>
+          <div>
+            <label>Payment Mode</label>
+            <input type="text" id="fn_payment_mode">
+          </div>
+          <div>
+            <label>Payment Date</label>
+            <input type="text" id="fn_payment_date">
+          </div>
+          <div>
+            <label>Account / Loan Confirmation</label>
+            <input type="text" id="fn_account_or_loan_confirmation">
+          </div>
+        </div>
+
+        <div style="margin-top:16px;">
+          <label>Reason for Payment</label>
+          <textarea id="fn_reason_for_payment"></textarea>
+        </div>
+
+        <div style="margin-top:16px;">
+          <label>Executive Notes</label>
+          <textarea id="fn_executive_notes"></textarea>
+        </div>
       </div>
 
       <button class="main-btn save-btn" id="saveBtn">Save Final Report</button>
@@ -196,14 +253,19 @@
     const token = localStorage.getItem("sonixa_token");
     const domain = localStorage.getItem("sonixa_domain");
 
-    if (!token) {
-      window.location.href = "/static/login.html";
-    }
-    if (!domain) {
-      window.location.href = "/static/domain.html";
-    }
+    if (!token) window.location.href = "/static/login.html";
+    if (!domain) window.location.href = "/static/domain.html";
 
     document.getElementById("domainBadge").textContent = domain;
+
+    const healthcareForm = document.getElementById("healthcareForm");
+    const financeForm = document.getElementById("financeForm");
+
+    if (domain === "finance") {
+      financeForm.classList.remove("hidden");
+    } else {
+      healthcareForm.classList.remove("hidden");
+    }
 
     let mediaRecorder;
     let audioChunks = [];
@@ -238,9 +300,7 @@
         mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
 
         mediaRecorder.ondataavailable = event => {
-          if (event.data.size > 0) {
-            audioChunks.push(event.data);
-          }
+          if (event.data.size > 0) audioChunks.push(event.data);
         };
 
         mediaRecorder.onstop = () => {
@@ -296,9 +356,7 @@
 
         if (data.error) {
           statusEl.textContent = "Error while processing.";
-          detectedLanguageEl.textContent = "Error";
-          rawTextEl.textContent = "Error";
-          processedTextEl.textContent = "Error";
+          processedTextEl.textContent = data.error;
           return;
         }
 
@@ -311,12 +369,7 @@
         rawTextEl.textContent = latestRawText;
         processedTextEl.textContent = latestProcessedText;
 
-        document.getElementById("symptoms").value = (latestStructuredOutput.symptoms || []).join(", ");
-        document.getElementById("duration").value = latestStructuredOutput.duration || "";
-        document.getElementById("bodyPart").value = (latestStructuredOutput.body_part || []).join(", ");
-        document.getElementById("severity").value = latestStructuredOutput.severity || "";
-        document.getElementById("notes").value = "";
-
+        fillEditableForm(latestStructuredOutput);
         statusEl.textContent = "AI draft ready. Review and save.";
       } catch (error) {
         statusEl.textContent = "Request failed.";
@@ -324,27 +377,71 @@
       }
     });
 
-    saveBtn.addEventListener("click", async () => {
-      const symptoms = document.getElementById("symptoms").value
+    function fillEditableForm(data) {
+      if (domain === "finance") {
+        document.getElementById("fn_payer_name").value = data.payer_name || "";
+        document.getElementById("fn_payment_status").value = data.payment_status || "";
+        document.getElementById("fn_amount").value = data.amount || "";
+        document.getElementById("fn_payment_mode").value = data.payment_mode || "";
+        document.getElementById("fn_payment_date").value = data.payment_date || "";
+        document.getElementById("fn_account_or_loan_confirmation").value = data.account_or_loan_confirmation || "";
+        document.getElementById("fn_reason_for_payment").value = data.reason_for_payment || "";
+        document.getElementById("fn_executive_notes").value = data.executive_notes || "";
+      } else {
+        document.getElementById("hc_symptoms").value = (data.symptoms || []).join(", ");
+        document.getElementById("hc_duration").value = data.duration || "";
+        document.getElementById("hc_body_part").value = (data.body_part || []).join(", ");
+        document.getElementById("hc_severity").value = data.severity || "";
+        document.getElementById("hc_past_history").value = data.past_history || "";
+        document.getElementById("hc_probable_status").value = data.probable_status || "";
+        document.getElementById("hc_observations").value = data.observations || "";
+        document.getElementById("hc_treatment_advice").value = data.treatment_advice || "";
+        document.getElementById("hc_notes").value = data.notes || "";
+      }
+    }
+
+    function buildFinalReport() {
+      if (domain === "finance") {
+        return {
+          payer_name: document.getElementById("fn_payer_name").value.trim() || null,
+          payment_status: document.getElementById("fn_payment_status").value.trim() || null,
+          amount: document.getElementById("fn_amount").value.trim() || null,
+          payment_mode: document.getElementById("fn_payment_mode").value.trim() || null,
+          payment_date: document.getElementById("fn_payment_date").value.trim() || null,
+          reason_for_payment: document.getElementById("fn_reason_for_payment").value.trim() || null,
+          account_or_loan_confirmation: document.getElementById("fn_account_or_loan_confirmation").value.trim() || null,
+          executive_notes: document.getElementById("fn_executive_notes").value.trim() || ""
+        };
+      }
+
+      const symptoms = document.getElementById("hc_symptoms").value
         .split(",")
         .map(x => x.trim())
         .filter(Boolean);
 
-      const bodyPart = document.getElementById("bodyPart").value
+      const bodyPart = document.getElementById("hc_body_part").value
         .split(",")
         .map(x => x.trim())
         .filter(Boolean);
 
-      const finalReport = {
-        symptoms: symptoms,
-        duration: document.getElementById("duration").value.trim() || null,
+      return {
+        symptoms,
+        duration: document.getElementById("hc_duration").value.trim() || null,
         body_part: bodyPart,
-        severity: document.getElementById("severity").value.trim() || null,
-        notes: document.getElementById("notes").value.trim()
+        severity: document.getElementById("hc_severity").value.trim() || null,
+        past_history: document.getElementById("hc_past_history").value.trim() || null,
+        observations: document.getElementById("hc_observations").value.trim() || null,
+        probable_status: document.getElementById("hc_probable_status").value.trim() || null,
+        treatment_advice: document.getElementById("hc_treatment_advice").value.trim() || null,
+        notes: document.getElementById("hc_notes").value.trim() || ""
       };
+    }
+
+    saveBtn.addEventListener("click", async () => {
+      const finalReport = buildFinalReport();
 
       const payload = {
-        domain: domain,
+        domain,
         detected_language: latestDetectedLanguage,
         raw_text: latestRawText,
         processed_text: latestProcessedText,

@@ -17,6 +17,8 @@
       align-items: center;
       padding: 18px 28px;
       background: #132f55;
+      gap: 12px;
+      flex-wrap: wrap;
     }
     .btn {
       padding: 10px 14px;
@@ -26,7 +28,9 @@
       font-weight: bold;
       background: #2563eb;
       color: white;
+      margin-left: 8px;
     }
+    .danger { background: #ef4444; }
     .container {
       max-width: 1100px;
       margin: 30px auto;
@@ -38,9 +42,7 @@
       padding: 18px;
       margin-bottom: 18px;
     }
-    .section {
-      margin-top: 10px;
-    }
+    .section { margin-top: 10px; }
     .label {
       color: #93c5fd;
       font-weight: bold;
@@ -54,12 +56,27 @@
       border-radius: 10px;
       color: #f8fafc;
     }
+    .row-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+    input {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: none;
+      min-width: 260px;
+    }
   </style>
 </head>
 <body>
   <div class="topbar">
     <h2>Sonixa AI - History</h2>
-    <button class="btn" onclick="goDashboard()">Back to Dashboard</button>
+    <div>
+      <input type="text" id="searchInput" placeholder="Search reports..." />
+      <button class="btn" onclick="loadHistory()">Search</button>
+      <button class="btn" onclick="goDashboard()">Back to Dashboard</button>
+    </div>
   </div>
 
   <div class="container" id="historyContainer">
@@ -74,9 +91,11 @@
 
     async function loadHistory() {
       const container = document.getElementById("historyContainer");
+      const q = document.getElementById("searchInput").value.trim();
 
       try {
-        const res = await fetch("/history", {
+        const url = q ? `/history?q=${encodeURIComponent(q)}` : "/history";
+        const res = await fetch(url, {
           headers: {
             "Authorization": "Bearer " + token
           }
@@ -121,10 +140,40 @@
               <div class="label">Final Report</div>
               <pre>${JSON.stringify(item.final_report || {}, null, 2)}</pre>
             </div>
+
+            <div class="row-actions">
+              <button class="btn danger" onclick="deleteReport('${item.id}')">Delete</button>
+            </div>
           </div>
         `).join("");
       } catch (err) {
         container.textContent = "Failed to load history.";
+      }
+    }
+
+    async function deleteReport(reportId) {
+      const confirmDelete = confirm("Are you sure you want to delete this report?");
+      if (!confirmDelete) return;
+
+      try {
+        const res = await fetch(`/delete-report/${reportId}`, {
+          method: "DELETE",
+          headers: {
+            "Authorization": "Bearer " + token
+          }
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+          alert("Delete failed");
+          return;
+        }
+
+        alert("Report deleted successfully");
+        loadHistory();
+      } catch (err) {
+        alert("Delete request failed");
       }
     }
 
