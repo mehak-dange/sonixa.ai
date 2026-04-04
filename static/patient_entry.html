@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sonixa AI - Patient Entry</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f2747;
+      color: white;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 28px;
+      background: #132f55;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
+    .btn {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+      background: #2563eb;
+      color: white;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 30px auto;
+      padding: 0 20px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .card {
+      background: #132f55;
+      padding: 24px;
+      border-radius: 18px;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.25);
+    }
+
+    h2, h3 {
+      margin-top: 0;
+    }
+
+    .option-card {
+      background: #0b1f3a;
+      padding: 18px;
+      border-radius: 12px;
+      margin: 15px 0;
+      cursor: pointer;
+      transition: 0.3s;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .option-card:hover {
+      background: #1d4ed8;
+      transform: scale(1.02);
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      margin-top: 10px;
+      box-sizing: border-box;
+    }
+
+    .search-btn {
+      margin-top: 10px;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      width: 100%;
+      background: #22c55e;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .patient-item {
+      background: #0b1f3a;
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+
+    #msg {
+      margin-top: 12px;
+      color: #fde68a;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <h2>Sonixa AI - Patient Entry</h2>
+  <button class="btn" onclick="goBack()">Back</button>
+</div>
+
+<div class="container">
+  <div class="card">
+    <h3>Start Consultation</h3>
+
+    <div class="option-card" onclick="newPatient()">
+      ➕ New Patient
+    </div>
+
+    <h3 style="margin-top:24px;">Find Existing Patient</h3>
+    <input id="phone" placeholder="Enter phone number">
+    <button class="search-btn" onclick="searchOldPatient()">Search</button>
+
+    <div id="msg"></div>
+  </div>
+
+  <div class="card">
+    <h3>Recent Patients</h3>
+    <div id="recentPatients">Loading...</div>
+  </div>
+</div>
+
+<script>
+const token = localStorage.getItem("sonixa_token");
+if (!token) {
+  window.location.href = "/static/login.html";
+}
+
+function newPatient() {
+  localStorage.removeItem("selected_patient_id");
+  localStorage.removeItem("selected_patient_phone");
+  localStorage.removeItem("selected_patient_data");
+  window.location.href = "/static/dashboard.html";
+}
+
+function goBack() {
+  window.location.href = "/static/domain.html";
+}
+
+async function searchOldPatient() {
+  const phone = document.getElementById("phone").value.trim();
+  const msg = document.getElementById("msg");
+
+  if (!phone) {
+    msg.textContent = "Please enter phone number.";
+    return;
+  }
+
+  msg.textContent = "Searching patient...";
+
+  try {
+    const res = await fetch(`/patients/by-phone/${encodeURIComponent(phone)}`, {
+      headers: {
+        "Authorization": "Bearer " + token
+      }
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || data.error || !data.patient) {
+      msg.textContent = "Patient not found.";
+      return;
+    }
+
+    localStorage.setItem("selected_patient_id", data.patient.id);
+    localStorage.setItem("selected_patient_phone", phone);
+    localStorage.setItem("selected_patient_data", JSON.stringify(data.patient));
+
+    msg.textContent = "Patient found. Opening consultation...";
+    window.location.href = "/static/dashboard.html";
+
+  } catch (err) {
+    msg.textContent = "Search failed.";
+  }
+}
+
+async function loadRecentPatients() {
+  try {
+    const res = await fetch("/patients", {
+      headers: {
+        "Authorization": "Bearer " + token
+      }
+    });
+
+    const data = await res.json();
+    const box = document.getElementById("recentPatients");
+
+    if (data.error || !data.patients || data.patients.length === 0) {
+      box.textContent = "No recent patients.";
+      return;
+    }
+
+    box.innerHTML = data.patients.slice(0, 6).map(patient => `
+      <div class="patient-item" onclick="openPatient('${patient.id}', '${(patient.phone || "").replace(/'/g, "\\'")}')">
+        <strong>${patient.display_name || patient.name}</strong><br>
+        Phone: ${patient.phone || "-"}<br>
+        Age: ${patient.age || "-"} | Gender: ${patient.gender || "-"}
+      </div>
+    `).join("");
+  } catch (err) {
+    document.getElementById("recentPatients").textContent = "Failed to load patients.";
+  }
+}
+
+async function openPatient(patientId, phone) {
+  try {
+    const res = await fetch(`/patients/${patientId}`, {
+      headers: {
+        "Authorization": "Bearer " + token
+      }
+    });
+
+    const data = await res.json();
+    if (!res.ok || data.error || !data.patient) {
+      alert("Failed to open patient.");
+      return;
+    }
+
+    localStorage.setItem("selected_patient_id", data.patient.id);
+    localStorage.setItem("selected_patient_phone", phone || "");
+    localStorage.setItem("selected_patient_data", JSON.stringify(data.patient));
+
+    window.location.href = "/static/dashboard.html";
+  } catch (err) {
+    alert("Failed to open patient.");
+  }
+}
+
+loadRecentPatients();
+</script>
+
+</body>
+</html>

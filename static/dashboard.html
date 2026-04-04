@@ -39,7 +39,7 @@
       font-weight: bold;
     }
     .logout { background: #ef4444; color: white; }
-    .history { background: #2563eb; color: white; }
+    .patients { background: #2563eb; color: white; }
 
     .container {
       max-width: 1100px;
@@ -85,6 +85,7 @@
     .stop-btn { background: #ef4444; color: white; }
     .send-btn { background: #2563eb; color: white; }
     .save-btn { background: #f59e0b; color: black; width: 100%; margin-top: 18px; }
+    .print-btn { background: #22c55e; color: black; width: 100%; margin-top: 10px; }
 
     .box {
       background: #0b1f3a;
@@ -127,10 +128,6 @@
       min-height: 90px;
       resize: vertical;
     }
-
-    .hidden {
-      display: none;
-    }
   </style>
 </head>
 <body>
@@ -138,7 +135,7 @@
     <h1>Sonixa AI</h1>
     <div class="actions">
       <div class="badge" id="domainBadge">domain</div>
-      <button class="btn history" onclick="goHistory()">History</button>
+      <button class="btn patients" onclick="goPatients()">Patients</button>
       <button class="btn logout" onclick="logout()">Logout</button>
     </div>
   </div>
@@ -160,6 +157,11 @@
     </div>
 
     <div class="box">
+      <div class="label">Current Patient Context</div>
+      <pre id="patientContext">New patient flow</pre>
+    </div>
+
+    <div class="box">
       <div class="label">Detected Language</div>
       <pre id="detectedLanguage">No output yet.</pre>
     </div>
@@ -177,109 +179,108 @@
     <div class="box">
       <div class="label">Editable Final Report</div>
 
-      <div id="healthcareForm" class="hidden">
-        <div class="grid">
-          <div>
-            <label>Symptoms (comma separated)</label>
-            <input type="text" id="hc_symptoms">
-          </div>
-          <div>
-            <label>Duration</label>
-            <input type="text" id="hc_duration">
-          </div>
-          <div>
-            <label>Body Part (comma separated)</label>
-            <input type="text" id="hc_body_part">
-          </div>
-          <div>
-            <label>Severity</label>
-            <input type="text" id="hc_severity">
-          </div>
-          <div>
-            <label>Past History</label>
-            <input type="text" id="hc_past_history">
-          </div>
-          <div>
-            <label>Probable Status</label>
-            <input type="text" id="hc_probable_status">
-          </div>
+      <div class="grid">
+        <div>
+          <label>Symptoms (comma separated)</label>
+          <input type="text" id="symptoms">
         </div>
-
-        <div style="margin-top:16px;">
-          <label>Observations</label>
-          <textarea id="hc_observations"></textarea>
+        <div>
+          <label>Duration</label>
+          <input type="text" id="duration">
         </div>
-
-        <div style="margin-top:16px;">
-          <label>Treatment Advice</label>
-          <textarea id="hc_treatment_advice"></textarea>
+        <div>
+          <label>Body Part (comma separated)</label>
+          <input type="text" id="bodyPart">
         </div>
-
-        <div style="margin-top:16px;">
-          <label>Notes</label>
-          <textarea id="hc_notes"></textarea>
+        <div>
+          <label>Severity</label>
+          <input type="text" id="severity">
         </div>
       </div>
 
-      <div id="financeForm" class="hidden">
-        <div class="grid">
-          <div>
-            <label>Payer Name</label>
-            <input type="text" id="fn_payer_name">
-          </div>
-          <div>
-            <label>Payment Status</label>
-            <input type="text" id="fn_payment_status">
-          </div>
-          <div>
-            <label>Amount</label>
-            <input type="text" id="fn_amount">
-          </div>
-          <div>
-            <label>Payment Mode</label>
-            <input type="text" id="fn_payment_mode">
-          </div>
-          <div>
-            <label>Payment Date</label>
-            <input type="text" id="fn_payment_date">
-          </div>
-          <div>
-            <label>Account / Loan Confirmation</label>
-            <input type="text" id="fn_account_or_loan_confirmation">
-          </div>
-        </div>
+      <div style="margin-top:16px;">
+        <label>Past History</label>
+        <textarea id="pastHistory"></textarea>
+      </div>
 
-        <div style="margin-top:16px;">
-          <label>Reason for Payment</label>
-          <textarea id="fn_reason_for_payment"></textarea>
-        </div>
+      <div style="margin-top:16px;">
+        <label>Observations</label>
+        <textarea id="observations"></textarea>
+      </div>
 
-        <div style="margin-top:16px;">
-          <label>Executive Notes</label>
-          <textarea id="fn_executive_notes"></textarea>
+      <div style="margin-top:16px;">
+        <label>Probable Status</label>
+        <input type="text" id="probableStatus">
+      </div>
+
+      <div style="margin-top:16px;">
+        <label>Treatment Advice</label>
+        <textarea id="treatmentAdvice"></textarea>
+      </div>
+
+      <div style="margin-top:16px;">
+        <label>Notes</label>
+        <textarea id="notes"></textarea>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="label">Patient Details (save after conversation)</div>
+
+      <div class="grid">
+        <div>
+          <label>Patient Name</label>
+          <input type="text" id="patientName">
+        </div>
+        <div>
+          <label>Age</label>
+          <input type="text" id="patientAge">
+        </div>
+        <div>
+          <label>Gender</label>
+          <input type="text" id="patientGender">
+        </div>
+        <div>
+          <label>Phone</label>
+          <input type="text" id="patientPhone">
         </div>
       </div>
 
-      <button class="main-btn save-btn" id="saveBtn">Save Final Report</button>
+      <div style="margin-top:16px;">
+        <label>Patient Notes</label>
+        <textarea id="patientNotes"></textarea>
+      </div>
+
+      <button class="main-btn save-btn" id="saveBtn">Save Patient + Conversation</button>
+      <button class="main-btn print-btn" onclick="printReport()">🖨️ Print Report</button>
     </div>
   </div>
 
   <script>
     const token = localStorage.getItem("sonixa_token");
-    const domain = localStorage.getItem("sonixa_domain");
+    const domain = localStorage.getItem("sonixa_domain") || "healthcare";
+    const selectedPatientData = localStorage.getItem("selected_patient_data");
 
-    if (!token) window.location.href = "/static/login.html";
-    if (!domain) window.location.href = "/static/domain.html";
+    if (!token) {
+      window.location.href = "/static/login.html";
+    }
 
     document.getElementById("domainBadge").textContent = domain;
 
-    const healthcareForm = document.getElementById("healthcareForm");
-    const financeForm = document.getElementById("financeForm");
+    if (selectedPatientData) {
+      try {
+        const patient = JSON.parse(selectedPatientData);
+        document.getElementById("patientContext").textContent =
+          `Existing patient selected: ${patient.display_name || patient.name} | Phone: ${patient.phone || "-"}`;
 
-    if (domain === "finance") {
-      financeForm.classList.remove("hidden");
-    } else {
-      healthcareForm.classList.remove("hidden");
+        document.getElementById("patientName").value = patient.display_name || "";
+        document.getElementById("patientAge").value = patient.age || "";
+        document.getElementById("patientGender").value = patient.gender || "";
+        document.getElementById("patientPhone").value = patient.phone || "";
+        document.getElementById("patientNotes").value = patient.notes || "";
+      } catch (e) {
+        localStorage.removeItem("selected_patient_data");
+      }
     }
 
     let mediaRecorder;
@@ -296,12 +297,7 @@
     const rawTextEl = document.getElementById("rawText");
     const processedTextEl = document.getElementById("processedText");
 
-    const startBtn = document.getElementById("startBtn");
-    const stopBtn = document.getElementById("stopBtn");
-    const sendBtn = document.getElementById("sendBtn");
-    const saveBtn = document.getElementById("saveBtn");
-
-    startBtn.addEventListener("click", async () => {
+    document.getElementById("startBtn").addEventListener("click", async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
@@ -320,30 +316,30 @@
 
         mediaRecorder.onstop = () => {
           recordedBlob = new Blob(audioChunks, { type: "audio/webm" });
-          sendBtn.disabled = false;
+          document.getElementById("sendBtn").disabled = false;
           statusEl.textContent = "Recording stopped. Ready to process.";
         };
 
         mediaRecorder.start();
         statusEl.textContent = "Recording...";
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        sendBtn.disabled = true;
+        document.getElementById("startBtn").disabled = true;
+        document.getElementById("stopBtn").disabled = false;
+        document.getElementById("sendBtn").disabled = true;
       } catch (error) {
         statusEl.textContent = "Microphone access denied or unavailable.";
         console.error(error);
       }
     });
 
-    stopBtn.addEventListener("click", () => {
+    document.getElementById("stopBtn").addEventListener("click", () => {
       if (mediaRecorder && mediaRecorder.state !== "inactive") {
         mediaRecorder.stop();
-        stopBtn.disabled = true;
-        startBtn.disabled = false;
+        document.getElementById("stopBtn").disabled = true;
+        document.getElementById("startBtn").disabled = false;
       }
     });
 
-    sendBtn.addEventListener("click", async () => {
+    document.getElementById("sendBtn").addEventListener("click", async () => {
       if (!recordedBlob) {
         statusEl.textContent = "No recording found.";
         return;
@@ -385,79 +381,43 @@
         rawTextEl.textContent = latestRawText;
         processedTextEl.textContent = latestProcessedText;
 
-        fillEditableForm(latestStructuredOutput);
-        statusEl.textContent = "AI draft ready. Review and save.";
+        document.getElementById("symptoms").value = (latestStructuredOutput.symptoms || []).join(", ");
+        document.getElementById("duration").value = latestStructuredOutput.duration || "";
+        document.getElementById("bodyPart").value = (latestStructuredOutput.body_part || []).join(", ");
+        document.getElementById("severity").value = latestStructuredOutput.severity || "";
+        document.getElementById("pastHistory").value = latestStructuredOutput.past_history || "";
+        document.getElementById("observations").value = latestStructuredOutput.observations || "";
+        document.getElementById("probableStatus").value = latestStructuredOutput.probable_status || "";
+        document.getElementById("treatmentAdvice").value = latestStructuredOutput.treatment_advice || "";
+        document.getElementById("notes").value = latestStructuredOutput.notes || "";
+
+        statusEl.textContent = "Conversation processed. Review and save.";
       } catch (error) {
         statusEl.textContent = "Request failed.";
         console.error(error);
       }
     });
 
-    function fillEditableForm(data) {
-      if (domain === "finance") {
-        document.getElementById("fn_payer_name").value = data.payer_name || "";
-        document.getElementById("fn_payment_status").value = data.payment_status || "";
-        document.getElementById("fn_amount").value = data.amount || "";
-        document.getElementById("fn_payment_mode").value = data.payment_mode || "";
-        document.getElementById("fn_payment_date").value = data.payment_date || "";
-        document.getElementById("fn_account_or_loan_confirmation").value = data.account_or_loan_confirmation || "";
-        document.getElementById("fn_reason_for_payment").value = data.reason_for_payment || "";
-        document.getElementById("fn_executive_notes").value = data.executive_notes || "";
-      } else {
-        document.getElementById("hc_symptoms").value = (data.symptoms || []).join(", ");
-        document.getElementById("hc_duration").value = data.duration || "";
-        document.getElementById("hc_body_part").value = (data.body_part || []).join(", ");
-        document.getElementById("hc_severity").value = data.severity || "";
-        document.getElementById("hc_past_history").value = data.past_history || "";
-        document.getElementById("hc_probable_status").value = data.probable_status || "";
-        document.getElementById("hc_observations").value = data.observations || "";
-        document.getElementById("hc_treatment_advice").value = data.treatment_advice || "";
-        document.getElementById("hc_notes").value = data.notes || "";
-      }
-    }
-
-    function buildFinalReport() {
-      if (domain === "finance") {
-        return {
-          payer_name: document.getElementById("fn_payer_name").value.trim() || null,
-          payment_status: document.getElementById("fn_payment_status").value.trim() || null,
-          amount: document.getElementById("fn_amount").value.trim() || null,
-          payment_mode: document.getElementById("fn_payment_mode").value.trim() || null,
-          payment_date: document.getElementById("fn_payment_date").value.trim() || null,
-          reason_for_payment: document.getElementById("fn_reason_for_payment").value.trim() || null,
-          account_or_loan_confirmation: document.getElementById("fn_account_or_loan_confirmation").value.trim() || null,
-          executive_notes: document.getElementById("fn_executive_notes").value.trim() || ""
-        };
-      }
-
-      const symptoms = document.getElementById("hc_symptoms").value
-        .split(",")
-        .map(x => x.trim())
-        .filter(Boolean);
-
-      const bodyPart = document.getElementById("hc_body_part").value
-        .split(",")
-        .map(x => x.trim())
-        .filter(Boolean);
-
-      return {
-        symptoms,
-        duration: document.getElementById("hc_duration").value.trim() || null,
-        body_part: bodyPart,
-        severity: document.getElementById("hc_severity").value.trim() || null,
-        past_history: document.getElementById("hc_past_history").value.trim() || null,
-        observations: document.getElementById("hc_observations").value.trim() || null,
-        probable_status: document.getElementById("hc_probable_status").value.trim() || null,
-        treatment_advice: document.getElementById("hc_treatment_advice").value.trim() || null,
-        notes: document.getElementById("hc_notes").value.trim() || ""
+    document.getElementById("saveBtn").addEventListener("click", async () => {
+      const finalReport = {
+        symptoms: document.getElementById("symptoms").value.split(",").map(x => x.trim()).filter(Boolean),
+        duration: document.getElementById("duration").value.trim() || null,
+        body_part: document.getElementById("bodyPart").value.split(",").map(x => x.trim()).filter(Boolean),
+        severity: document.getElementById("severity").value.trim() || null,
+        past_history: document.getElementById("pastHistory").value.trim() || null,
+        observations: document.getElementById("observations").value.trim() || null,
+        probable_status: document.getElementById("probableStatus").value.trim() || null,
+        treatment_advice: document.getElementById("treatmentAdvice").value.trim() || null,
+        notes: document.getElementById("notes").value.trim() || ""
       };
-    }
-
-    saveBtn.addEventListener("click", async () => {
-      const finalReport = buildFinalReport();
 
       const payload = {
-        domain,
+        domain: domain,
+        patient_name: document.getElementById("patientName").value.trim(),
+        patient_age: document.getElementById("patientAge").value.trim() || null,
+        patient_gender: document.getElementById("patientGender").value.trim() || null,
+        patient_phone: document.getElementById("patientPhone").value.trim() || null,
+        patient_notes: document.getElementById("patientNotes").value.trim() || null,
         detected_language: latestDetectedLanguage,
         raw_text: latestRawText,
         processed_text: latestProcessedText,
@@ -465,10 +425,15 @@
         final_report: finalReport
       };
 
-      statusEl.textContent = "Saving report...";
+      if (!payload.patient_name) {
+        statusEl.textContent = "Patient name is required.";
+        return;
+      }
+
+      statusEl.textContent = "Saving patient and conversation...";
 
       try {
-        const response = await fetch("/save-report", {
+        const response = await fetch("/save-conversation", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -480,26 +445,114 @@
         const data = await response.json();
 
         if (data.error) {
-          statusEl.textContent = "Error while saving report.";
+          statusEl.textContent = "Error while saving.";
           return;
         }
 
-        statusEl.textContent = "Report saved successfully.";
+        statusEl.textContent = "Patient and conversation saved successfully.";
+
+        localStorage.removeItem("selected_patient_id");
+        localStorage.removeItem("selected_patient_phone");
+        localStorage.removeItem("selected_patient_data");
       } catch (error) {
         statusEl.textContent = "Save failed.";
         console.error(error);
       }
     });
 
+    function printReport() {
+      const patientName = document.getElementById("patientName").value || "-";
+      const patientAge = document.getElementById("patientAge").value || "-";
+      const patientGender = document.getElementById("patientGender").value || "-";
+      const patientPhone = document.getElementById("patientPhone").value || "-";
+      const patientNotes = document.getElementById("patientNotes").value || "-";
+
+      const symptoms = document.getElementById("symptoms").value || "-";
+      const duration = document.getElementById("duration").value || "-";
+      const bodyPart = document.getElementById("bodyPart").value || "-";
+      const severity = document.getElementById("severity").value || "-";
+      const pastHistory = document.getElementById("pastHistory").value || "-";
+      const observations = document.getElementById("observations").value || "-";
+      const probableStatus = document.getElementById("probableStatus").value || "-";
+      const treatmentAdvice = document.getElementById("treatmentAdvice").value || "-";
+      const notes = document.getElementById("notes").value || "-";
+
+      const printWindow = window.open("", "_blank");
+
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Sonixa Patient Report</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                padding: 32px;
+                color: #000;
+              }
+              h1, h2 {
+                margin-bottom: 8px;
+              }
+              .section {
+                margin-top: 20px;
+              }
+              .label {
+                font-weight: bold;
+              }
+              .row {
+                margin-bottom: 10px;
+              }
+              hr {
+                margin: 20px 0;
+              }
+            </style>
+          </head>
+          <body>
+            <h1>Sonixa AI</h1>
+            <h2>Patient Report</h2>
+            <hr />
+
+            <div class="section">
+              <div class="row"><span class="label">Patient Name:</span> ${patientName}</div>
+              <div class="row"><span class="label">Age:</span> ${patientAge}</div>
+              <div class="row"><span class="label">Gender:</span> ${patientGender}</div>
+              <div class="row"><span class="label">Phone:</span> ${patientPhone}</div>
+              <div class="row"><span class="label">Patient Notes:</span> ${patientNotes}</div>
+            </div>
+
+            <hr />
+
+            <div class="section">
+              <div class="row"><span class="label">Symptoms:</span> ${symptoms}</div>
+              <div class="row"><span class="label">Duration:</span> ${duration}</div>
+              <div class="row"><span class="label">Body Part:</span> ${bodyPart}</div>
+              <div class="row"><span class="label">Severity:</span> ${severity}</div>
+              <div class="row"><span class="label">Past History:</span> ${pastHistory}</div>
+              <div class="row"><span class="label">Observations:</span> ${observations}</div>
+              <div class="row"><span class="label">Probable Status:</span> ${probableStatus}</div>
+              <div class="row"><span class="label">Treatment Advice:</span> ${treatmentAdvice}</div>
+              <div class="row"><span class="label">Doctor Notes:</span> ${notes}</div>
+            </div>
+          </body>
+        </html>
+      `);
+
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+    }
+
     function logout() {
       localStorage.removeItem("sonixa_token");
       localStorage.removeItem("sonixa_user");
       localStorage.removeItem("sonixa_domain");
+      localStorage.removeItem("selected_patient_id");
+      localStorage.removeItem("selected_patient_phone");
+      localStorage.removeItem("selected_patient_data");
       window.location.href = "/static/login.html";
     }
 
-    function goHistory() {
-      window.location.href = "/static/history.html";
+    function goPatients() {
+      window.location.href = "/static/patients.html";
     }
   </script>
 </body>

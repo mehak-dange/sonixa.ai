@@ -10,7 +10,7 @@ from pydantic import BaseModel, EmailStr
 from indic_transliteration import sanscript
 from indic_transliteration.sanscript import transliterate
 
-from db import users_collection, interactions_collection
+from db import users_collection, patients_collection, conversations_collection
 from auth_utils import hash_password, verify_password, create_access_token, decode_access_token
 from extract_llm import extract_data
 
@@ -26,8 +26,7 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# small is multilingual and stronger than base for your current setup
-model = whisper.load_model("medium")
+model = whisper.load_model("small")
 
 
 class RegisterRequest(BaseModel):
@@ -41,8 +40,13 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class SaveReportRequest(BaseModel):
+class SaveConversationRequest(BaseModel):
     domain: str
+    patient_name: str
+    patient_age: str | None = None
+    patient_gender: str | None = None
+    patient_phone: str | None = None
+    patient_notes: str | None = None
     detected_language: str | None = None
     raw_text: str
     processed_text: str
@@ -56,6 +60,12 @@ def serialize_user(user):
         "name": user["name"],
         "email": user["email"]
     }
+
+
+def serialize_objectid(doc):
+    doc["id"] = str(doc["_id"])
+    del doc["_id"]
+    return doc
 
 
 def get_current_user_from_token(authorization: str = None):
@@ -157,7 +167,6 @@ async def process_audio(
         with open(file_path, "wb") as f:
             f.write(await file.read())
 
-        # language hint improves stability for Kannada/Hindi tests
         if language_hint == "kannada":
             result = model.transcribe(
                 file_path,
@@ -193,7 +202,6 @@ async def process_audio(
         raw_text = result["text"].strip()
         detected_language = result.get("language", "unknown")
 
-        # transliterate Devanagari only
         if any('\u0900' <= ch <= '\u097F' for ch in raw_text):
             processed_text = transliterate(
                 raw_text,
@@ -201,7 +209,6 @@ async def process_audio(
                 sanscript.ITRANS
             ).lower()
         else:
-            # keep Kannada/English text as-is
             processed_text = raw_text.lower()
 
         processed_text = " ".join(processed_text.split())
@@ -224,13 +231,49 @@ async def process_audio(
         return {"error": str(e)}
 
 
-@app.post("/save-report")
-def save_report(data: SaveReportRequest, authorization: str = Header(None)):
+@app.post("/save-conversation")
+def save_conversation(data: SaveConversationRequest, authorization: str = Header(None)):
     try:
         user = get_current_user_from_token(authorization)
+        doctor_id = str(user["_id"])
 
-        report_doc = {
-            "user_id": str(user["_id"]),
+        existing_patient = patients_collection.find_one({
+            "doctor_id": doctor_id,
+            "name": data.patient_name.strip().lower(),
+            "phone": (data.patient_phone or "").strip()
+        })
+
+        if existing_patient:
+            patient_id = existing_patient["_id"]
+            patients_collection.update_one(
+                {"_id": patient_id},
+                {
+                    "$set": {
+                        "age": data.patient_age,
+                        "gender": data.patient_gender,
+                        "notes": data.patient_notes,
+                        "updated_at": datetime.now(timezone.utc)
+                    }
+                }
+            )
+        else:
+            patient_doc = {
+                "doctor_id": doctor_id,
+                "name": data.patient_name.strip().lower(),
+                "display_name": data.patient_name.strip(),
+                "age": data.patient_age,
+                "gender": data.patient_gender,
+                "phone": (data.patient_phone or "").strip(),
+                "notes": data.patient_notes,
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc)
+            }
+            result = patients_collection.insert_one(patient_doc)
+            patient_id = result.inserted_id
+
+        conversation_doc = {
+            "doctor_id": doctor_id,
+            "patient_id": str(patient_id),
             "domain": data.domain,
             "detected_language": data.detected_language,
             "raw_text": data.raw_text,
@@ -240,70 +283,120 @@ def save_report(data: SaveReportRequest, authorization: str = Header(None)):
             "created_at": datetime.now(timezone.utc)
         }
 
-        result = interactions_collection.insert_one(report_doc)
+        conv_result = conversations_collection.insert_one(conversation_doc)
 
         return {
-            "message": "Report saved successfully",
-            "report_id": str(result.inserted_id)
+            "message": "Patient and conversation saved successfully",
+            "patient_id": str(patient_id),
+            "conversation_id": str(conv_result.inserted_id)
         }
 
     except Exception as e:
         return {"error": str(e)}
 
 
-@app.get("/history")
-def get_history(authorization: str = Header(None), q: str = ""):
+@app.get("/patients")
+def get_patients(authorization: str = Header(None), q: str = ""):
     try:
         user = get_current_user_from_token(authorization)
+        doctor_id = str(user["_id"])
 
-        history = list(
-            interactions_collection.find(
-                {"user_id": str(user["_id"])},
-                {"user_id": 0}
-            ).sort("created_at", -1)
+        patients = list(
+            patients_collection.find({"doctor_id": doctor_id}).sort("updated_at", -1)
         )
 
         formatted = []
-        for item in history:
-            record = {
-                "id": str(item["_id"]),
-                "domain": item.get("domain"),
-                "detected_language": item.get("detected_language"),
-                "raw_text": item.get("raw_text"),
-                "processed_text": item.get("processed_text"),
-                "structured_output": item.get("structured_output"),
-                "final_report": item.get("final_report"),
-                "created_at": item.get("created_at")
-            }
-            formatted.append(record)
+        for patient in patients:
+            patient = serialize_objectid(patient)
+            if q and q.lower() not in str(patient).lower():
+                continue
+            formatted.append(patient)
 
-        if q:
-            q_lower = q.lower()
-            formatted = [
-                item for item in formatted
-                if q_lower in str(item).lower()
-            ]
-
-        return {"history": formatted}
+        return {"patients": formatted}
 
     except Exception as e:
         return {"error": str(e)}
 
 
-@app.delete("/delete-report/{report_id}")
-def delete_report(report_id: str, authorization: str = Header(None)):
+@app.get("/patients/by-phone/{phone}")
+def get_patient_by_phone(phone: str, authorization: str = Header(None)):
     try:
         user = get_current_user_from_token(authorization)
+        doctor_id = str(user["_id"])
 
-        result = interactions_collection.delete_one({
-            "_id": ObjectId(report_id),
-            "user_id": str(user["_id"])
+        patient = patients_collection.find_one({
+            "doctor_id": doctor_id,
+            "phone": phone.strip()
+        })
+
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+
+        return {"patient": serialize_objectid(patient)}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/patients/{patient_id}")
+def get_patient(patient_id: str, authorization: str = Header(None)):
+    try:
+        user = get_current_user_from_token(authorization)
+        doctor_id = str(user["_id"])
+
+        patient = patients_collection.find_one({
+            "_id": ObjectId(patient_id),
+            "doctor_id": doctor_id
+        })
+
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+
+        return {"patient": serialize_objectid(patient)}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/patients/{patient_id}/conversations")
+def get_patient_conversations(patient_id: str, authorization: str = Header(None)):
+    try:
+        user = get_current_user_from_token(authorization)
+        doctor_id = str(user["_id"])
+
+        conversations = list(
+            conversations_collection.find({
+                "doctor_id": doctor_id,
+                "patient_id": patient_id
+            }).sort("created_at", -1)
+        )
+
+        formatted = []
+        for convo in conversations:
+            convo = serialize_objectid(convo)
+            formatted.append(convo)
+
+        return {"conversations": formatted}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.delete("/conversations/{conversation_id}")
+def delete_conversation(conversation_id: str, authorization: str = Header(None)):
+    try:
+        user = get_current_user_from_token(authorization)
+        doctor_id = str(user["_id"])
+
+        result = conversations_collection.delete_one({
+            "_id": ObjectId(conversation_id),
+            "doctor_id": doctor_id
         })
 
         if result.deleted_count == 0:
-            raise HTTPException(status_code=404, detail="Report not found")
+            raise HTTPException(status_code=404, detail="Conversation not found")
 
-        return {"message": "Report deleted successfully"}
+        return {"message": "Deleted successfully"}
 
     except Exception as e:
         return {"error": str(e)}

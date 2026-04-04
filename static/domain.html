@@ -25,10 +25,7 @@
       text-align: center;
     }
     h1 { margin-top: 0; }
-    .subtitle {
-      color: #b8cbe6;
-      margin-bottom: 30px;
-    }
+    .subtitle { color: #b8cbe6; margin-bottom: 30px; }
     .grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -64,16 +61,14 @@
       <div class="domain-card" onclick="selectDomain('healthcare')">
         <div class="title">Healthcare</div>
         <div class="desc">
-          Symptoms, past history, observations, probable status,
-          treatment advice, editable patient report.
+          Doctor-patient conversation, structured clinical report, patient-wise history.
         </div>
       </div>
 
       <div class="domain-card" onclick="selectDomain('finance')">
         <div class="title">Finance</div>
         <div class="desc">
-          Payment status, amount, payment mode, payment date,
-          payer details, verification workflow.
+          Payment, verification, transaction details and conversation records.
         </div>
       </div>
     </div>
@@ -87,7 +82,10 @@
 
     function selectDomain(domain) {
       localStorage.setItem("sonixa_domain", domain);
-      window.location.href = "/static/dashboard.html";
+      localStorage.removeItem("selected_patient_id");
+      localStorage.removeItem("selected_patient_phone");
+      localStorage.removeItem("selected_patient_data");
+      window.location.href = "/static/patient_entry.html";
     }
   </script>
 </body>

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sonixa AI - Patients</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f2747;
+      color: white;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 28px;
+      background: #132f55;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+      background: #2563eb;
+      color: white;
+      margin-left: 8px;
+    }
+
+    input {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: none;
+      min-width: 260px;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 30px auto;
+      padding: 0 18px;
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 20px;
+    }
+
+    .card {
+      background: #132f55;
+      border-radius: 16px;
+      padding: 18px;
+    }
+
+    .patient-item {
+      background: #0b1f3a;
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+
+    .section {
+      margin-top: 12px;
+    }
+
+    .label {
+      color: #93c5fd;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      margin: 0;
+      background: #0b1f3a;
+      padding: 12px;
+      border-radius: 10px;
+      color: #f8fafc;
+    }
+
+    .conv-card {
+      background: #0b1f3a;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .danger {
+      background: #ef4444;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h2>Sonixa AI - Patients</h2>
+    <div>
+      <input type="text" id="searchInput" placeholder="Search patient..." />
+      <button class="btn" onclick="loadPatients()">Search</button>
+      <button class="btn" onclick="goDashboard()">Back to Dashboard</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h3>Patient List</h3>
+      <div id="patientList">Loading...</div>
+    </div>
+
+    <div class="card">
+      <h3>Patient Details & Conversations</h3>
+      <div id="patientDetails">Select a patient</div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem("sonixa_token");
+    if (!token) window.location.href = "/static/login.html";
+
+    async function loadPatients() {
+      const q = document.getElementById("searchInput").value.trim();
+      const url = q ? `/patients?q=${encodeURIComponent(q)}` : "/patients";
+
+      try {
+        const res = await fetch(url, {
+          headers: {
+            "Authorization": "Bearer " + token
+          }
+        });
+
+        const data = await res.json();
+        const patientList = document.getElementById("patientList");
+
+        if (data.error) {
+          patientList.textContent = data.error;
+          return;
+        }
+
+        const patients = data.patients || [];
+        if (patients.length === 0) {
+          patientList.textContent = "No patients found.";
+          return;
+        }
+
+        patientList.innerHTML = patients.map(p => `
+          <div class="patient-item" onclick="loadPatientDetails('${p.id}')">
+            <strong>${p.display_name || p.name}</strong><br>
+            Phone: ${p.phone || "-"}<br>
+            Age: ${p.age || "-"} | Gender: ${p.gender || "-"}
+          </div>
+        `).join("");
+      } catch (err) {
+        document.getElementById("patientList").textContent = "Failed to load patients.";
+      }
+    }
+
+    async function loadPatientDetails(patientId) {
+      try {
+        const [patientRes, convoRes] = await Promise.all([
+          fetch(`/patients/${patientId}`, {
+            headers: { "Authorization": "Bearer " + token }
+          }),
+          fetch(`/patients/${patientId}/conversations`, {
+            headers: { "Authorization": "Bearer " + token }
+          })
+        ]);
+
+        const patientData = await patientRes.json();
+        const convoData = await convoRes.json();
+
+        if (patientData.error || convoData.error) {
+          document.getElementById("patientDetails").textContent = "Failed to load patient details.";
+          return;
+        }
+
+        const p = patientData.patient;
+        const conversations = convoData.conversations || [];
+
+        document.getElementById("patientDetails").innerHTML = `
+          <div class="section">
+            <div class="label">Patient Info</div>
+            <pre>${JSON.stringify(p, null, 2)}</pre>
+          </div>
+
+          <div class="section">
+            <div class="label">Past Conversations</div>
+            ${
+              conversations.length === 0
+                ? "<div>No conversations found.</div>"
+                : conversations.map(c => `
+                  <div class="conv-card">
+                    <div><strong>Date:</strong> ${new Date(c.created_at).toLocaleString()}</div>
+                    <div><strong>Detected Language:</strong> ${c.detected_language || "-"}</div>
+
+                    <div class="section">
+                      <div class="label">Raw Text</div>
+                      <pre>${c.raw_text || ""}</pre>
+                    </div>
+
+                    <div class="section">
+                      <div class="label">Final Report</div>
+                      <pre>${JSON.stringify(c.final_report || {}, null, 2)}</pre>
+                    </div>
+
+                    <button class="btn danger" onclick="deleteConversation('${c.id}', '${p.id}')">Delete</button>
+                  </div>
+                `).join("")
+            }
+          </div>
+        `;
+      } catch (err) {
+        document.getElementById("patientDetails").textContent = "Failed to load details.";
+      }
+    }
+
+    async function deleteConversation(conversationId, patientId) {
+      const ok = confirm("Delete this conversation?");
+      if (!ok) return;
+
+      try {
+        const res = await fetch(`/conversations/${conversationId}`, {
+          method: "DELETE",
+          headers: {
+            "Authorization": "Bearer " + token
+          }
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+          alert("Delete failed");
+          return;
+        }
+
+        loadPatientDetails(patientId);
+      } catch (err) {
+        alert("Delete request failed");
+      }
+    }
+
+    function goDashboard() {
+      window.location.href = "/static/dashboard.html";
+    }
+
+    loadPatients();
+  </script>
+</body>
+</html>
