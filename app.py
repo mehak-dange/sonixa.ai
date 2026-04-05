@@ -42,11 +42,20 @@ class LoginRequest(BaseModel):
 
 class SaveConversationRequest(BaseModel):
     domain: str
-    patient_name: str
+
+    # Healthcare fields
+    patient_name: str | None = None
     patient_age: str | None = None
     patient_gender: str | None = None
     patient_phone: str | None = None
     patient_notes: str | None = None
+
+    # Finance fields
+    account_holder_name: str | None = None
+    account_number: str | None = None
+    contact_number: str | None = None
+    finance_notes: str | None = None
+
     detected_language: str | None = None
     raw_text: str
     processed_text: str
@@ -237,43 +246,104 @@ def save_conversation(data: SaveConversationRequest, authorization: str = Header
         user = get_current_user_from_token(authorization)
         doctor_id = str(user["_id"])
 
-        existing_patient = patients_collection.find_one({
+        # HEALTHCARE FLOW
+        if data.domain == "healthcare":
+            existing_patient = patients_collection.find_one({
+                "doctor_id": doctor_id,
+                "type": "healthcare",
+                "name": (data.patient_name or "").strip().lower(),
+                "phone": (data.patient_phone or "").strip()
+            })
+
+            if existing_patient:
+                patient_id = existing_patient["_id"]
+                patients_collection.update_one(
+                    {"_id": patient_id},
+                    {
+                        "$set": {
+                            "age": data.patient_age,
+                            "gender": data.patient_gender,
+                            "notes": data.patient_notes,
+                            "updated_at": datetime.now(timezone.utc)
+                        }
+                    }
+                )
+            else:
+                patient_doc = {
+                    "doctor_id": doctor_id,
+                    "type": "healthcare",
+                    "name": (data.patient_name or "").strip().lower(),
+                    "display_name": (data.patient_name or "").strip(),
+                    "age": data.patient_age,
+                    "gender": data.patient_gender,
+                    "phone": (data.patient_phone or "").strip(),
+                    "notes": data.patient_notes,
+                    "created_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
+                }
+                result = patients_collection.insert_one(patient_doc)
+                patient_id = result.inserted_id
+
+            conversation_doc = {
+                "doctor_id": doctor_id,
+                "record_type": "healthcare",
+                "record_id": str(patient_id),
+                "domain": data.domain,
+                "detected_language": data.detected_language,
+                "raw_text": data.raw_text,
+                "processed_text": data.processed_text,
+                "structured_output": data.structured_output,
+                "final_report": data.final_report,
+                "created_at": datetime.now(timezone.utc)
+            }
+
+            conv_result = conversations_collection.insert_one(conversation_doc)
+
+            return {
+                "message": "Patient and conversation saved successfully",
+                "record_id": str(patient_id),
+                "conversation_id": str(conv_result.inserted_id)
+            }
+
+        # FINANCE FLOW
+        existing_account = patients_collection.find_one({
             "doctor_id": doctor_id,
-            "name": data.patient_name.strip().lower(),
-            "phone": (data.patient_phone or "").strip()
+            "type": "finance",
+            "account_holder_name": (data.account_holder_name or "").strip().lower(),
+            "account_number": (data.account_number or "").strip()
         })
 
-        if existing_patient:
-            patient_id = existing_patient["_id"]
+        if existing_account:
+            account_id = existing_account["_id"]
             patients_collection.update_one(
-                {"_id": patient_id},
+                {"_id": account_id},
                 {
                     "$set": {
-                        "age": data.patient_age,
-                        "gender": data.patient_gender,
-                        "notes": data.patient_notes,
+                        "contact_number": data.contact_number,
+                        "notes": data.finance_notes,
                         "updated_at": datetime.now(timezone.utc)
                     }
                 }
             )
         else:
-            patient_doc = {
+            account_doc = {
                 "doctor_id": doctor_id,
-                "name": data.patient_name.strip().lower(),
-                "display_name": data.patient_name.strip(),
-                "age": data.patient_age,
-                "gender": data.patient_gender,
-                "phone": (data.patient_phone or "").strip(),
-                "notes": data.patient_notes,
+                "type": "finance",
+                "account_holder_name": (data.account_holder_name or "").strip().lower(),
+                "display_name": (data.account_holder_name or "").strip(),
+                "account_number": (data.account_number or "").strip(),
+                "contact_number": (data.contact_number or "").strip(),
+                "notes": data.finance_notes,
                 "created_at": datetime.now(timezone.utc),
                 "updated_at": datetime.now(timezone.utc)
             }
-            result = patients_collection.insert_one(patient_doc)
-            patient_id = result.inserted_id
+            result = patients_collection.insert_one(account_doc)
+            account_id = result.inserted_id
 
         conversation_doc = {
             "doctor_id": doctor_id,
-            "patient_id": str(patient_id),
+            "record_type": "finance",
+            "record_id": str(account_id),
             "domain": data.domain,
             "detected_language": data.detected_language,
             "raw_text": data.raw_text,
@@ -286,8 +356,8 @@ def save_conversation(data: SaveConversationRequest, authorization: str = Header
         conv_result = conversations_collection.insert_one(conversation_doc)
 
         return {
-            "message": "Patient and conversation saved successfully",
-            "patient_id": str(patient_id),
+            "message": "Finance record and conversation saved successfully",
+            "record_id": str(account_id),
             "conversation_id": str(conv_result.inserted_id)
         }
 
@@ -295,6 +365,7 @@ def save_conversation(data: SaveConversationRequest, authorization: str = Header
         return {"error": str(e)}
 
 
+# HEALTHCARE LISTING
 @app.get("/patients")
 def get_patients(authorization: str = Header(None), q: str = ""):
     try:
@@ -302,7 +373,7 @@ def get_patients(authorization: str = Header(None), q: str = ""):
         doctor_id = str(user["_id"])
 
         patients = list(
-            patients_collection.find({"doctor_id": doctor_id}).sort("updated_at", -1)
+            patients_collection.find({"doctor_id": doctor_id, "type": "healthcare"}).sort("updated_at", -1)
         )
 
         formatted = []
@@ -326,6 +397,7 @@ def get_patient_by_phone(phone: str, authorization: str = Header(None)):
 
         patient = patients_collection.find_one({
             "doctor_id": doctor_id,
+            "type": "healthcare",
             "phone": phone.strip()
         })
 
@@ -346,7 +418,8 @@ def get_patient(patient_id: str, authorization: str = Header(None)):
 
         patient = patients_collection.find_one({
             "_id": ObjectId(patient_id),
-            "doctor_id": doctor_id
+            "doctor_id": doctor_id,
+            "type": "healthcare"
         })
 
         if not patient:
@@ -367,7 +440,99 @@ def get_patient_conversations(patient_id: str, authorization: str = Header(None)
         conversations = list(
             conversations_collection.find({
                 "doctor_id": doctor_id,
-                "patient_id": patient_id
+                "record_type": "healthcare",
+                "record_id": patient_id
+            }).sort("created_at", -1)
+        )
+
+        formatted = []
+        for convo in conversations:
+            convo = serialize_objectid(convo)
+            formatted.append(convo)
+
+        return {"conversations": formatted}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# FINANCE LISTING
+@app.get("/finance-records")
+def get_finance_records(authorization: str = Header(None), q: str = ""):
+    try:
+        user = get_current_user_from_token(authorization)
+        doctor_id = str(user["_id"])
+
+        records = list(
+            patients_collection.find({"doctor_id": doctor_id, "type": "finance"}).sort("updated_at", -1)
+        )
+
+        formatted = []
+        for record in records:
+            record = serialize_objectid(record)
+            if q and q.lower() not in str(record).lower():
+                continue
+            formatted.append(record)
+
+        return {"records": formatted}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/finance-records/by-contact/{contact}")
+def get_finance_record_by_contact(contact: str, authorization: str = Header(None)):
+    try:
+        user = get_current_user_from_token(authorization)
+        doctor_id = str(user["_id"])
+
+        record = patients_collection.find_one({
+            "doctor_id": doctor_id,
+            "type": "finance",
+            "contact_number": contact.strip()
+        })
+
+        if not record:
+            raise HTTPException(status_code=404, detail="Finance record not found")
+
+        return {"record": serialize_objectid(record)}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/finance-records/{record_id}")
+def get_finance_record(record_id: str, authorization: str = Header(None)):
+    try:
+        user = get_current_user_from_token(authorization)
+        doctor_id = str(user["_id"])
+
+        record = patients_collection.find_one({
+            "_id": ObjectId(record_id),
+            "doctor_id": doctor_id,
+            "type": "finance"
+        })
+
+        if not record:
+            raise HTTPException(status_code=404, detail="Finance record not found")
+
+        return {"record": serialize_objectid(record)}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/finance-records/{record_id}/conversations")
+def get_finance_record_conversations(record_id: str, authorization: str = Header(None)):
+    try:
+        user = get_current_user_from_token(authorization)
+        doctor_id = str(user["_id"])
+
+        conversations = list(
+            conversations_collection.find({
+                "doctor_id": doctor_id,
+                "record_type": "finance",
+                "record_id": record_id
             }).sort("created_at", -1)
         )
 

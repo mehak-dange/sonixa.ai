@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sonixa AI - Finance History</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f2747;
+      color: white;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 28px;
+      background: #132f55;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+      background: #2563eb;
+      color: white;
+      margin-left: 8px;
+    }
+
+    input {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: none;
+      min-width: 260px;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 30px auto;
+      padding: 0 18px;
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 20px;
+    }
+
+    .card {
+      background: #132f55;
+      border-radius: 16px;
+      padding: 18px;
+    }
+
+    .record-item {
+      background: #0b1f3a;
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+
+    .section {
+      margin-top: 12px;
+    }
+
+    .label {
+      color: #93c5fd;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      margin: 0;
+      background: #0b1f3a;
+      padding: 12px;
+      border-radius: 10px;
+      color: #f8fafc;
+    }
+
+    .conv-card {
+      background: #0b1f3a;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .danger {
+      background: #ef4444;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h2>Sonixa AI - Finance History</h2>
+    <div>
+      <input type="text" id="searchInput" placeholder="Search finance record..." />
+      <button class="btn" onclick="loadFinanceRecords()">Search</button>
+      <button class="btn" onclick="goBack()">Back</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h3>Finance Records</h3>
+      <div id="recordList">Loading...</div>
+    </div>
+
+    <div class="card">
+      <h3>Record Details & Conversations</h3>
+      <div id="recordDetails">Select a finance record</div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem("sonixa_token");
+    if (!token) window.location.href = "/static/login.html";
+
+    async function loadFinanceRecords() {
+      const q = document.getElementById("searchInput").value.trim();
+      const url = q ? `/finance-records?q=${encodeURIComponent(q)}` : "/finance-records";
+
+      try {
+        const res = await fetch(url, {
+          headers: {
+            "Authorization": "Bearer " + token
+          }
+        });
+
+        const data = await res.json();
+        const recordList = document.getElementById("recordList");
+
+        if (data.error) {
+          recordList.textContent = data.error;
+          return;
+        }
+
+        const records = data.records || [];
+        if (records.length === 0) {
+          recordList.textContent = "No finance records found.";
+          return;
+        }
+
+        recordList.innerHTML = records.map(r => `
+          <div class="record-item" onclick="loadRecordDetails('${r.id}')">
+            <strong>${r.display_name || r.account_holder_name || "-"}</strong><br>
+            Contact: ${r.contact_number || "-"}<br>
+            Account/Loan No: ${r.account_number || "-"}
+          </div>
+        `).join("");
+      } catch (err) {
+        document.getElementById("recordList").textContent = "Failed to load finance records.";
+      }
+    }
+
+    async function loadRecordDetails(recordId) {
+      try {
+        const [recordRes, convoRes] = await Promise.all([
+          fetch(`/finance-records/${recordId}`, {
+            headers: { "Authorization": "Bearer " + token }
+          }),
+          fetch(`/finance-records/${recordId}/conversations`, {
+            headers: { "Authorization": "Bearer " + token }
+          })
+        ]);
+
+        const recordData = await recordRes.json();
+        const convoData = await convoRes.json();
+
+        if (recordData.error || convoData.error) {
+          document.getElementById("recordDetails").textContent = "Failed to load finance record details.";
+          return;
+        }
+
+        const r = recordData.record;
+        const conversations = convoData.conversations || [];
+
+        document.getElementById("recordDetails").innerHTML = `
+          <div class="section">
+            <div class="label">Account Holder Info</div>
+            <pre>${JSON.stringify(r, null, 2)}</pre>
+          </div>
+
+          <div class="section">
+            <div class="label">Past Conversations</div>
+            ${
+              conversations.length === 0
+                ? "<div>No conversations found.</div>"
+                : conversations.map(c => `
+                  <div class="conv-card">
+                    <div><strong>Date:</strong> ${new Date(c.created_at).toLocaleString()}</div>
+                    <div><strong>Detected Language:</strong> ${c.detected_language || "-"}</div>
+
+                    <div class="section">
+                      <div class="label">Raw Text</div>
+                      <pre>${c.raw_text || ""}</pre>
+                    </div>
+
+                    <div class="section">
+                      <div class="label">Final Finance Report</div>
+                      <pre>${JSON.stringify(c.final_report || {}, null, 2)}</pre>
+                    </div>
+
+                    <button class="btn danger" onclick="deleteConversation('${c.id}', '${r.id}')">Delete</button>
+                  </div>
+                `).join("")
+            }
+          </div>
+        `;
+      } catch (err) {
+        document.getElementById("recordDetails").textContent = "Failed to load details.";
+      }
+    }
+
+    async function deleteConversation(conversationId, recordId) {
+      const ok = confirm("Delete this conversation?");
+      if (!ok) return;
+
+      try {
+        const res = await fetch(`/conversations/${conversationId}`, {
+          method: "DELETE",
+          headers: {
+            "Authorization": "Bearer " + token
+          }
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+          alert("Delete failed");
+          return;
+        }
+
+        loadRecordDetails(recordId);
+      } catch (err) {
+        alert("Delete request failed");
+      }
+    }
+
+    function goBack() {
+      window.location.href = "/static/dashboard.html";
+    }
+
+    loadFinanceRecords();
+  </script>
+</body>
+</html>

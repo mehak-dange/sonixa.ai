@@ -23,6 +23,7 @@
       border-radius: 18px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.25);
       text-align: center;
+      position: relative;
     }
     h1 { margin-top: 0; }
     .subtitle { color: #b8cbe6; margin-bottom: 30px; }
@@ -50,10 +51,28 @@
       margin-bottom: 10px;
     }
     .desc { color: #cbd5e1; }
+    .top-actions {
+      display: flex;
+      justify-content: flex-start;
+      margin-bottom: 20px;
+    }
+    .btn {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+      background: #2563eb;
+      color: white;
+    }
   </style>
 </head>
 <body>
   <div class="card">
+    <div class="top-actions">
+      <button class="btn" onclick="goBack()">Back</button>
+    </div>
+
     <h1>Select Domain</h1>
     <div class="subtitle">Choose the workflow Sonixa should use</div>
 
@@ -68,7 +87,7 @@
       <div class="domain-card" onclick="selectDomain('finance')">
         <div class="title">Finance</div>
         <div class="desc">
-          Payment, verification, transaction details and conversation records.
+          Payment, verification, transaction details and conversation history.
         </div>
       </div>
     </div>
@@ -86,6 +105,10 @@
       localStorage.removeItem("selected_patient_phone");
       localStorage.removeItem("selected_patient_data");
       window.location.href = "/static/patient_entry.html";
+    }
+
+    function goBack() {
+      window.location.href = "/static/login.html";
     }
   </script>
 </body>

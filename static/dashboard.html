@@ -24,6 +24,7 @@
       display: flex;
       gap: 12px;
       align-items: center;
+      flex-wrap: wrap;
     }
     .badge {
       background: #1d4ed8;
@@ -38,8 +39,8 @@
       cursor: pointer;
       font-weight: bold;
     }
+    .navbtn { background: #2563eb; color: white; }
     .logout { background: #ef4444; color: white; }
-    .patients { background: #2563eb; color: white; }
 
     .container {
       max-width: 1100px;
@@ -128,6 +129,10 @@
       min-height: 90px;
       resize: vertical;
     }
+
+    .hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -135,7 +140,8 @@
     <h1>Sonixa AI</h1>
     <div class="actions">
       <div class="badge" id="domainBadge">domain</div>
-      <button class="btn patients" onclick="goPatients()">Patients</button>
+      <button class="btn navbtn" id="historyBtn" onclick="goHistory()">History</button>
+      <button class="btn navbtn" onclick="goBack()">Back</button>
       <button class="btn logout" onclick="logout()">Logout</button>
     </div>
   </div>
@@ -157,8 +163,8 @@
     </div>
 
     <div class="box">
-      <div class="label">Current Patient Context</div>
-      <pre id="patientContext">New patient flow</pre>
+      <div class="label">Current Context</div>
+      <pre id="recordContext">New record flow</pre>
     </div>
 
     <div class="box">
@@ -176,7 +182,7 @@
       <pre id="processedText">No output yet.</pre>
     </div>
 
-    <div class="box">
+    <div class="box" id="healthcareReportBox">
       <div class="label">Editable Final Report</div>
 
       <div class="grid">
@@ -224,7 +230,45 @@
       </div>
     </div>
 
-    <div class="box">
+    <div class="box hidden" id="financeReportBox">
+      <div class="label">Editable Finance Report</div>
+
+      <div class="grid">
+        <div>
+          <label>Payment Status</label>
+          <input type="text" id="paymentStatus">
+        </div>
+        <div>
+          <label>Amount</label>
+          <input type="text" id="amount">
+        </div>
+        <div>
+          <label>Payment Mode</label>
+          <input type="text" id="paymentMode">
+        </div>
+        <div>
+          <label>Payment Date</label>
+          <input type="text" id="paymentDate">
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <label>Reason for Payment</label>
+        <textarea id="reasonForPayment"></textarea>
+      </div>
+
+      <div style="margin-top:16px;">
+        <label>Account / Loan Confirmation</label>
+        <input type="text" id="accountLoanConfirmation">
+      </div>
+
+      <div style="margin-top:16px;">
+        <label>Executive Notes</label>
+        <textarea id="executiveNotes"></textarea>
+      </div>
+    </div>
+
+    <div class="box" id="healthcareInfoBox">
       <div class="label">Patient Details (save after conversation)</div>
 
       <div class="grid">
@@ -250,10 +294,33 @@
         <label>Patient Notes</label>
         <textarea id="patientNotes"></textarea>
       </div>
-
-      <button class="main-btn save-btn" id="saveBtn">Save Patient + Conversation</button>
-      <button class="main-btn print-btn" onclick="printReport()">🖨️ Print Report</button>
     </div>
+
+    <div class="box hidden" id="financeInfoBox">
+      <div class="label">Account Holder Details</div>
+
+      <div class="grid">
+        <div>
+          <label>Account Holder Name</label>
+          <input type="text" id="accountHolderName">
+        </div>
+        <div>
+          <label>Account / Loan Number</label>
+          <input type="text" id="accountNumber">
+        </div>
+        <div>
+          <label>Contact Number</label>
+          <input type="text" id="contactNumber">
+        </div>
+        <div>
+          <label>General Notes</label>
+          <input type="text" id="financeNotes">
+        </div>
+      </div>
+    </div>
+
+    <button class="main-btn save-btn" id="saveBtn">Save Record + Conversation</button>
+    <button class="main-btn print-btn" onclick="printReport()">🖨️ Print Report</button>
   </div>
 
   <script>
@@ -267,10 +334,37 @@
 
     document.getElementById("domainBadge").textContent = domain;
 
-    if (selectedPatientData) {
+    const healthcareReportBox = document.getElementById("healthcareReportBox");
+    const financeReportBox = document.getElementById("financeReportBox");
+    const healthcareInfoBox = document.getElementById("healthcareInfoBox");
+    const financeInfoBox = document.getElementById("financeInfoBox");
+
+    if (domain === "finance") {
+      healthcareReportBox.classList.add("hidden");
+      healthcareInfoBox.classList.add("hidden");
+      financeReportBox.classList.remove("hidden");
+      financeInfoBox.classList.remove("hidden");
+
+      if (selectedPatientData) {
+        try {
+          const record = JSON.parse(selectedPatientData);
+          document.getElementById("recordContext").textContent =
+            `Existing finance record selected: ${record.display_name || record.account_holder_name || "-"} | Contact: ${record.contact_number || "-"}`;
+
+          document.getElementById("accountHolderName").value = record.display_name || "";
+          document.getElementById("accountNumber").value = record.account_number || "";
+          document.getElementById("contactNumber").value = record.contact_number || "";
+          document.getElementById("financeNotes").value = record.notes || "";
+        } catch (e) {
+          localStorage.removeItem("selected_patient_data");
+        }
+      } else {
+        document.getElementById("recordContext").textContent = "New finance record flow";
+      }
+    } else if (selectedPatientData) {
       try {
         const patient = JSON.parse(selectedPatientData);
-        document.getElementById("patientContext").textContent =
+        document.getElementById("recordContext").textContent =
           `Existing patient selected: ${patient.display_name || patient.name} | Phone: ${patient.phone || "-"}`;
 
         document.getElementById("patientName").value = patient.display_name || "";
@@ -381,15 +475,25 @@
         rawTextEl.textContent = latestRawText;
         processedTextEl.textContent = latestProcessedText;
 
-        document.getElementById("symptoms").value = (latestStructuredOutput.symptoms || []).join(", ");
-        document.getElementById("duration").value = latestStructuredOutput.duration || "";
-        document.getElementById("bodyPart").value = (latestStructuredOutput.body_part || []).join(", ");
-        document.getElementById("severity").value = latestStructuredOutput.severity || "";
-        document.getElementById("pastHistory").value = latestStructuredOutput.past_history || "";
-        document.getElementById("observations").value = latestStructuredOutput.observations || "";
-        document.getElementById("probableStatus").value = latestStructuredOutput.probable_status || "";
-        document.getElementById("treatmentAdvice").value = latestStructuredOutput.treatment_advice || "";
-        document.getElementById("notes").value = latestStructuredOutput.notes || "";
+        if (domain === "finance") {
+          document.getElementById("paymentStatus").value = latestStructuredOutput.payment_status || "";
+          document.getElementById("amount").value = latestStructuredOutput.amount || "";
+          document.getElementById("paymentMode").value = latestStructuredOutput.payment_mode || "";
+          document.getElementById("paymentDate").value = latestStructuredOutput.payment_date || "";
+          document.getElementById("reasonForPayment").value = latestStructuredOutput.reason_for_payment || "";
+          document.getElementById("accountLoanConfirmation").value = latestStructuredOutput.account_or_loan_confirmation || "";
+          document.getElementById("executiveNotes").value = latestStructuredOutput.executive_notes || "";
+        } else {
+          document.getElementById("symptoms").value = (latestStructuredOutput.symptoms || []).join(", ");
+          document.getElementById("duration").value = latestStructuredOutput.duration || "";
+          document.getElementById("bodyPart").value = (latestStructuredOutput.body_part || []).join(", ");
+          document.getElementById("severity").value = latestStructuredOutput.severity || "";
+          document.getElementById("pastHistory").value = latestStructuredOutput.past_history || "";
+          document.getElementById("observations").value = latestStructuredOutput.observations || "";
+          document.getElementById("probableStatus").value = latestStructuredOutput.probable_status || "";
+          document.getElementById("treatmentAdvice").value = latestStructuredOutput.treatment_advice || "";
+          document.getElementById("notes").value = latestStructuredOutput.notes || "";
+        }
 
         statusEl.textContent = "Conversation processed. Review and save.";
       } catch (error) {
@@ -399,38 +503,60 @@
     });
 
     document.getElementById("saveBtn").addEventListener("click", async () => {
-      const finalReport = {
-        symptoms: document.getElementById("symptoms").value.split(",").map(x => x.trim()).filter(Boolean),
-        duration: document.getElementById("duration").value.trim() || null,
-        body_part: document.getElementById("bodyPart").value.split(",").map(x => x.trim()).filter(Boolean),
-        severity: document.getElementById("severity").value.trim() || null,
-        past_history: document.getElementById("pastHistory").value.trim() || null,
-        observations: document.getElementById("observations").value.trim() || null,
-        probable_status: document.getElementById("probableStatus").value.trim() || null,
-        treatment_advice: document.getElementById("treatmentAdvice").value.trim() || null,
-        notes: document.getElementById("notes").value.trim() || ""
-      };
-
-      const payload = {
+      let payload = {
         domain: domain,
-        patient_name: document.getElementById("patientName").value.trim(),
-        patient_age: document.getElementById("patientAge").value.trim() || null,
-        patient_gender: document.getElementById("patientGender").value.trim() || null,
-        patient_phone: document.getElementById("patientPhone").value.trim() || null,
-        patient_notes: document.getElementById("patientNotes").value.trim() || null,
         detected_language: latestDetectedLanguage,
         raw_text: latestRawText,
         processed_text: latestProcessedText,
-        structured_output: latestStructuredOutput,
-        final_report: finalReport
+        structured_output: latestStructuredOutput
       };
 
-      if (!payload.patient_name) {
-        statusEl.textContent = "Patient name is required.";
-        return;
+      if (domain === "finance") {
+        payload.account_holder_name = document.getElementById("accountHolderName").value.trim();
+        payload.account_number = document.getElementById("accountNumber").value.trim() || null;
+        payload.contact_number = document.getElementById("contactNumber").value.trim() || null;
+        payload.finance_notes = document.getElementById("financeNotes").value.trim() || null;
+
+        payload.final_report = {
+          payment_status: document.getElementById("paymentStatus").value.trim() || null,
+          amount: document.getElementById("amount").value.trim() || null,
+          payment_mode: document.getElementById("paymentMode").value.trim() || null,
+          payment_date: document.getElementById("paymentDate").value.trim() || null,
+          reason_for_payment: document.getElementById("reasonForPayment").value.trim() || null,
+          account_or_loan_confirmation: document.getElementById("accountLoanConfirmation").value.trim() || null,
+          executive_notes: document.getElementById("executiveNotes").value.trim() || ""
+        };
+
+        if (!payload.account_holder_name) {
+          statusEl.textContent = "Account holder name is required.";
+          return;
+        }
+      } else {
+        payload.patient_name = document.getElementById("patientName").value.trim();
+        payload.patient_age = document.getElementById("patientAge").value.trim() || null;
+        payload.patient_gender = document.getElementById("patientGender").value.trim() || null;
+        payload.patient_phone = document.getElementById("patientPhone").value.trim() || null;
+        payload.patient_notes = document.getElementById("patientNotes").value.trim() || null;
+
+        payload.final_report = {
+          symptoms: document.getElementById("symptoms").value.split(",").map(x => x.trim()).filter(Boolean),
+          duration: document.getElementById("duration").value.trim() || null,
+          body_part: document.getElementById("bodyPart").value.split(",").map(x => x.trim()).filter(Boolean),
+          severity: document.getElementById("severity").value.trim() || null,
+          past_history: document.getElementById("pastHistory").value.trim() || null,
+          observations: document.getElementById("observations").value.trim() || null,
+          probable_status: document.getElementById("probableStatus").value.trim() || null,
+          treatment_advice: document.getElementById("treatmentAdvice").value.trim() || null,
+          notes: document.getElementById("notes").value.trim() || ""
+        };
+
+        if (!payload.patient_name) {
+          statusEl.textContent = "Patient name is required.";
+          return;
+        }
       }
 
-      statusEl.textContent = "Saving patient and conversation...";
+      statusEl.textContent = "Saving record and conversation...";
 
       try {
         const response = await fetch("/save-conversation", {
@@ -449,7 +575,7 @@
           return;
         }
 
-        statusEl.textContent = "Patient and conversation saved successfully.";
+        statusEl.textContent = "Record and conversation saved successfully.";
 
         localStorage.removeItem("selected_patient_id");
         localStorage.removeItem("selected_patient_phone");
@@ -461,28 +587,59 @@
     });
 
     function printReport() {
-      const patientName = document.getElementById("patientName").value || "-";
-      const patientAge = document.getElementById("patientAge").value || "-";
-      const patientGender = document.getElementById("patientGender").value || "-";
-      const patientPhone = document.getElementById("patientPhone").value || "-";
-      const patientNotes = document.getElementById("patientNotes").value || "-";
+      let title = "Sonixa Report";
+      let detailsHtml = "";
+      let reportHtml = "";
 
-      const symptoms = document.getElementById("symptoms").value || "-";
-      const duration = document.getElementById("duration").value || "-";
-      const bodyPart = document.getElementById("bodyPart").value || "-";
-      const severity = document.getElementById("severity").value || "-";
-      const pastHistory = document.getElementById("pastHistory").value || "-";
-      const observations = document.getElementById("observations").value || "-";
-      const probableStatus = document.getElementById("probableStatus").value || "-";
-      const treatmentAdvice = document.getElementById("treatmentAdvice").value || "-";
-      const notes = document.getElementById("notes").value || "-";
+      if (domain === "finance") {
+        title = "Sonixa Finance Report";
+
+        detailsHtml = `
+          <div class="row"><span class="label">Account Holder Name:</span> ${document.getElementById("accountHolderName").value || "-"}</div>
+          <div class="row"><span class="label">Account / Loan Number:</span> ${document.getElementById("accountNumber").value || "-"}</div>
+          <div class="row"><span class="label">Contact Number:</span> ${document.getElementById("contactNumber").value || "-"}</div>
+          <div class="row"><span class="label">General Notes:</span> ${document.getElementById("financeNotes").value || "-"}</div>
+        `;
+
+        reportHtml = `
+          <div class="row"><span class="label">Payment Status:</span> ${document.getElementById("paymentStatus").value || "-"}</div>
+          <div class="row"><span class="label">Amount:</span> ${document.getElementById("amount").value || "-"}</div>
+          <div class="row"><span class="label">Payment Mode:</span> ${document.getElementById("paymentMode").value || "-"}</div>
+          <div class="row"><span class="label">Payment Date:</span> ${document.getElementById("paymentDate").value || "-"}</div>
+          <div class="row"><span class="label">Reason for Payment:</span> ${document.getElementById("reasonForPayment").value || "-"}</div>
+          <div class="row"><span class="label">Account / Loan Confirmation:</span> ${document.getElementById("accountLoanConfirmation").value || "-"}</div>
+          <div class="row"><span class="label">Executive Notes:</span> ${document.getElementById("executiveNotes").value || "-"}</div>
+        `;
+      } else {
+        title = "Sonixa Patient Report";
+
+        detailsHtml = `
+          <div class="row"><span class="label">Patient Name:</span> ${document.getElementById("patientName").value || "-"}</div>
+          <div class="row"><span class="label">Age:</span> ${document.getElementById("patientAge").value || "-"}</div>
+          <div class="row"><span class="label">Gender:</span> ${document.getElementById("patientGender").value || "-"}</div>
+          <div class="row"><span class="label">Phone:</span> ${document.getElementById("patientPhone").value || "-"}</div>
+          <div class="row"><span class="label">Patient Notes:</span> ${document.getElementById("patientNotes").value || "-"}</div>
+        `;
+
+        reportHtml = `
+          <div class="row"><span class="label">Symptoms:</span> ${document.getElementById("symptoms").value || "-"}</div>
+          <div class="row"><span class="label">Duration:</span> ${document.getElementById("duration").value || "-"}</div>
+          <div class="row"><span class="label">Body Part:</span> ${document.getElementById("bodyPart").value || "-"}</div>
+          <div class="row"><span class="label">Severity:</span> ${document.getElementById("severity").value || "-"}</div>
+          <div class="row"><span class="label">Past History:</span> ${document.getElementById("pastHistory").value || "-"}</div>
+          <div class="row"><span class="label">Observations:</span> ${document.getElementById("observations").value || "-"}</div>
+          <div class="row"><span class="label">Probable Status:</span> ${document.getElementById("probableStatus").value || "-"}</div>
+          <div class="row"><span class="label">Treatment Advice:</span> ${document.getElementById("treatmentAdvice").value || "-"}</div>
+          <div class="row"><span class="label">Doctor Notes:</span> ${document.getElementById("notes").value || "-"}</div>
+        `;
+      }
 
       const printWindow = window.open("", "_blank");
 
       printWindow.document.write(`
         <html>
           <head>
-            <title>Sonixa Patient Report</title>
+            <title>${title}</title>
             <style>
               body {
                 font-family: Arial, sans-serif;
@@ -508,30 +665,11 @@
           </head>
           <body>
             <h1>Sonixa AI</h1>
-            <h2>Patient Report</h2>
+            <h2>${title}</h2>
             <hr />
-
-            <div class="section">
-              <div class="row"><span class="label">Patient Name:</span> ${patientName}</div>
-              <div class="row"><span class="label">Age:</span> ${patientAge}</div>
-              <div class="row"><span class="label">Gender:</span> ${patientGender}</div>
-              <div class="row"><span class="label">Phone:</span> ${patientPhone}</div>
-              <div class="row"><span class="label">Patient Notes:</span> ${patientNotes}</div>
-            </div>
-
+            <div class="section">${detailsHtml}</div>
             <hr />
-
-            <div class="section">
-              <div class="row"><span class="label">Symptoms:</span> ${symptoms}</div>
-              <div class="row"><span class="label">Duration:</span> ${duration}</div>
-              <div class="row"><span class="label">Body Part:</span> ${bodyPart}</div>
-              <div class="row"><span class="label">Severity:</span> ${severity}</div>
-              <div class="row"><span class="label">Past History:</span> ${pastHistory}</div>
-              <div class="row"><span class="label">Observations:</span> ${observations}</div>
-              <div class="row"><span class="label">Probable Status:</span> ${probableStatus}</div>
-              <div class="row"><span class="label">Treatment Advice:</span> ${treatmentAdvice}</div>
-              <div class="row"><span class="label">Doctor Notes:</span> ${notes}</div>
-            </div>
+            <div class="section">${reportHtml}</div>
           </body>
         </html>
       `);
@@ -551,8 +689,16 @@
       window.location.href = "/static/login.html";
     }
 
-    function goPatients() {
-      window.location.href = "/static/patients.html";
+    function goHistory() {
+      if (domain === "finance") {
+        window.location.href = "/static/finance_history.html";
+      } else {
+        window.location.href = "/static/patients.html";
+      }
+    }
+
+    function goBack() {
+      window.location.href = "/static/patient_entry.html";
     }
   </script>
 </body>

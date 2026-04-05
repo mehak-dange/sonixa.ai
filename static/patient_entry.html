@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Sonixa AI - Patient Entry</title>
+  <title>Sonixa AI - Entry</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
@@ -69,6 +69,13 @@
       transform: scale(1.02);
     }
 
+    .subtext {
+      font-size: 14px;
+      font-weight: normal;
+      color: #dbeafe;
+      margin-top: 6px;
+    }
+
     input {
       width: 100%;
       padding: 12px;
@@ -76,6 +83,7 @@
       border: none;
       margin-top: 10px;
       box-sizing: border-box;
+      font-size: 15px;
     }
 
     .search-btn {
@@ -87,58 +95,106 @@
       background: #22c55e;
       font-weight: bold;
       cursor: pointer;
+      font-size: 15px;
     }
 
-    .patient-item {
+    .item {
       background: #0b1f3a;
       padding: 12px;
       border-radius: 10px;
       margin-bottom: 10px;
       cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .item:hover {
+      background: #17345a;
     }
 
     #msg {
       margin-top: 12px;
       color: #fde68a;
       white-space: pre-wrap;
+      min-height: 20px;
+    }
+
+    .section-title {
+      margin-top: 24px;
+      margin-bottom: 8px;
+      color: #93c5fd;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
 
 <div class="topbar">
-  <h2>Sonixa AI - Patient Entry</h2>
+  <h2 id="pageTitle">Sonixa AI - Entry</h2>
   <button class="btn" onclick="goBack()">Back</button>
 </div>
 
 <div class="container">
   <div class="card">
-    <h3>Start Consultation</h3>
+    <h3 id="startTitle">Start Consultation</h3>
 
-    <div class="option-card" onclick="newPatient()">
-      ➕ New Patient
+    <div class="option-card" onclick="newRecord()">
+      <span id="newTitle">➕ New Patient</span>
+      <div class="subtext" id="newSubtext">Start a fresh consultation and create a new patient record.</div>
     </div>
 
-    <h3 style="margin-top:24px;">Find Existing Patient</h3>
-    <input id="phone" placeholder="Enter phone number">
-    <button class="search-btn" onclick="searchOldPatient()">Search</button>
+    <div class="option-card" onclick="focusSearch()">
+      <span id="existingTitle">📂 Existing Patient</span>
+      <div class="subtext" id="existingSubtext">Search an old patient using phone number and continue consultation.</div>
+    </div>
+
+    <div class="section-title" id="searchSectionTitle">Search Existing Patient</div>
+    <input id="searchInput" placeholder="Enter patient phone number">
+    <button class="search-btn" onclick="searchExisting()">Search</button>
 
     <div id="msg"></div>
   </div>
 
   <div class="card">
-    <h3>Recent Patients</h3>
-    <div id="recentPatients">Loading...</div>
+    <h3 id="recentTitle">Recent Patients</h3>
+    <div id="recentList">Loading...</div>
   </div>
 </div>
 
 <script>
 const token = localStorage.getItem("sonixa_token");
+const domain = localStorage.getItem("sonixa_domain") || "healthcare";
+
 if (!token) {
   window.location.href = "/static/login.html";
 }
 
-function newPatient() {
+const ui = {
+  pageTitle: document.getElementById("pageTitle"),
+  startTitle: document.getElementById("startTitle"),
+  newTitle: document.getElementById("newTitle"),
+  newSubtext: document.getElementById("newSubtext"),
+  existingTitle: document.getElementById("existingTitle"),
+  existingSubtext: document.getElementById("existingSubtext"),
+  searchSectionTitle: document.getElementById("searchSectionTitle"),
+  searchInput: document.getElementById("searchInput"),
+  recentTitle: document.getElementById("recentTitle"),
+  recentList: document.getElementById("recentList"),
+  msg: document.getElementById("msg")
+};
+
+if (domain === "finance") {
+  ui.pageTitle.textContent = "Sonixa AI - Finance Entry";
+  ui.startTitle.textContent = "Start Finance Workflow";
+  ui.newTitle.textContent = "➕ New Account Holder";
+  ui.newSubtext.textContent = "Start a fresh finance conversation and create a new account record.";
+  ui.existingTitle.textContent = "📂 Existing Account Holder";
+  ui.existingSubtext.textContent = "Search an old finance record using contact number and continue workflow.";
+  ui.searchSectionTitle.textContent = "Search Existing Finance Record";
+  ui.searchInput.placeholder = "Enter contact number";
+  ui.recentTitle.textContent = "Recent Finance Records";
+}
+
+function newRecord() {
   localStorage.removeItem("selected_patient_id");
   localStorage.removeItem("selected_patient_phone");
   localStorage.removeItem("selected_patient_data");
@@ -149,96 +205,126 @@ function goBack() {
   window.location.href = "/static/domain.html";
 }
 
-async function searchOldPatient() {
-  const phone = document.getElementById("phone").value.trim();
-  const msg = document.getElementById("msg");
+function focusSearch() {
+  ui.searchInput.focus();
+}
 
-  if (!phone) {
-    msg.textContent = "Please enter phone number.";
+async function searchExisting() {
+  const value = ui.searchInput.value.trim();
+
+  if (!value) {
+    ui.msg.textContent = domain === "finance"
+      ? "Please enter contact number."
+      : "Please enter phone number.";
     return;
   }
 
-  msg.textContent = "Searching patient...";
+  ui.msg.textContent = "Searching...";
 
   try {
-    const res = await fetch(`/patients/by-phone/${encodeURIComponent(phone)}`, {
+    const url = domain === "finance"
+      ? `/finance-records/by-contact/${encodeURIComponent(value)}`
+      : `/patients/by-phone/${encodeURIComponent(value)}`;
+
+    const res = await fetch(url, {
       headers: {
         "Authorization": "Bearer " + token
       }
     });
 
     const data = await res.json();
+    const record = domain === "finance" ? data.record : data.patient;
 
-    if (!res.ok || data.error || !data.patient) {
-      msg.textContent = "Patient not found.";
+    if (!res.ok || data.error || !record) {
+      ui.msg.textContent = domain === "finance"
+        ? "Finance record not found."
+        : "Patient not found.";
       return;
     }
 
-    localStorage.setItem("selected_patient_id", data.patient.id);
-    localStorage.setItem("selected_patient_phone", phone);
-    localStorage.setItem("selected_patient_data", JSON.stringify(data.patient));
+    localStorage.setItem("selected_patient_id", record.id);
+    localStorage.setItem("selected_patient_phone", domain === "finance" ? (record.contact_number || "") : (record.phone || ""));
+    localStorage.setItem("selected_patient_data", JSON.stringify(record));
 
-    msg.textContent = "Patient found. Opening consultation...";
+    ui.msg.textContent = "Record found. Opening dashboard...";
     window.location.href = "/static/dashboard.html";
 
   } catch (err) {
-    msg.textContent = "Search failed.";
+    ui.msg.textContent = "Search failed.";
   }
 }
 
-async function loadRecentPatients() {
+async function loadRecent() {
   try {
-    const res = await fetch("/patients", {
+    const url = domain === "finance" ? "/finance-records" : "/patients";
+    const res = await fetch(url, {
       headers: {
         "Authorization": "Bearer " + token
       }
     });
 
     const data = await res.json();
-    const box = document.getElementById("recentPatients");
+    const list = domain === "finance" ? (data.records || []) : (data.patients || []);
 
-    if (data.error || !data.patients || data.patients.length === 0) {
-      box.textContent = "No recent patients.";
+    if (data.error || list.length === 0) {
+      ui.recentList.textContent = domain === "finance"
+        ? "No recent finance records."
+        : "No recent patients.";
       return;
     }
 
-    box.innerHTML = data.patients.slice(0, 6).map(patient => `
-      <div class="patient-item" onclick="openPatient('${patient.id}', '${(patient.phone || "").replace(/'/g, "\\'")}')">
-        <strong>${patient.display_name || patient.name}</strong><br>
-        Phone: ${patient.phone || "-"}<br>
-        Age: ${patient.age || "-"} | Gender: ${patient.gender || "-"}
-      </div>
-    `).join("");
+    ui.recentList.innerHTML = list.slice(0, 8).map(item => {
+      if (domain === "finance") {
+        return `
+          <div class="item" onclick="openExisting('${item.id}')">
+            <strong>${item.display_name || item.account_holder_name || "-"}</strong><br>
+            Contact: ${item.contact_number || "-"}<br>
+            Account/Loan No: ${item.account_number || "-"}
+          </div>
+        `;
+      }
+
+      return `
+        <div class="item" onclick="openExisting('${item.id}')">
+          <strong>${item.display_name || item.name}</strong><br>
+          Phone: ${item.phone || "-"}<br>
+          Age: ${item.age || "-"} | Gender: ${item.gender || "-"}
+        </div>
+      `;
+    }).join("");
   } catch (err) {
-    document.getElementById("recentPatients").textContent = "Failed to load patients.";
+    ui.recentList.textContent = "Failed to load records.";
   }
 }
 
-async function openPatient(patientId, phone) {
+async function openExisting(id) {
   try {
-    const res = await fetch(`/patients/${patientId}`, {
+    const url = domain === "finance" ? `/finance-records/${id}` : `/patients/${id}`;
+    const res = await fetch(url, {
       headers: {
         "Authorization": "Bearer " + token
       }
     });
 
     const data = await res.json();
-    if (!res.ok || data.error || !data.patient) {
-      alert("Failed to open patient.");
+    const record = domain === "finance" ? data.record : data.patient;
+
+    if (!res.ok || data.error || !record) {
+      alert("Failed to open record.");
       return;
     }
 
-    localStorage.setItem("selected_patient_id", data.patient.id);
-    localStorage.setItem("selected_patient_phone", phone || "");
-    localStorage.setItem("selected_patient_data", JSON.stringify(data.patient));
+    localStorage.setItem("selected_patient_id", record.id);
+    localStorage.setItem("selected_patient_phone", domain === "finance" ? (record.contact_number || "") : (record.phone || ""));
+    localStorage.setItem("selected_patient_data", JSON.stringify(record));
 
     window.location.href = "/static/dashboard.html";
   } catch (err) {
-    alert("Failed to open patient.");
+    alert("Failed to open record.");
   }
 }
 
-loadRecentPatients();
+loadRecent();
 </script>
 
 </body>
